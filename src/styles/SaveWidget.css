@@ -1,0 +1,27 @@
+.saveWidgetWrapper{
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    justify-content: space-between;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    max-height: 80vh;
+    min-width: 200px;
+    transform: translate(-50%, -50%);
+    padding: 20px;
+    border: 1px solid black;
+    border-radius: 5px;
+    background-color: white;
+    z-index: 10;
+
+}
+
+.saveWidgetButtonWrapper{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 10px;
+
+}

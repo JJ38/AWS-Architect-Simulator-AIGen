@@ -1,0 +1,9 @@
+/* @import url('@xyflow/react/dist/style.css'); */
+@import url('./xy-theme.css');
+
+.reactFlowWrapper {
+  display: flex;
+  position: relative;
+  height: 100%;
+  flex: 1;
+}

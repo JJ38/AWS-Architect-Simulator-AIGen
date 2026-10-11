@@ -1,0 +1,125 @@
+.propertiesWidgetWrapper{
+    position: absolute;
+    left: 15px;
+    top: 15px;
+    border-radius: 5px;
+    border: 2px solid rgb(20, 20, 20);
+    padding: 10px;
+    min-width: 200px;
+    max-width: 300px;
+    max-height: 80%;
+    background-color: rgb(60, 60, 60);
+    color: white;
+    overflow-y: auto;
+}
+
+.propertyInfo{
+    font-size: 0.8rem;
+    margin: 0px 5px 10px 5px;
+}
+
+.checkboxWrapper{
+    display: flex;
+    flex-direction: row;
+}
+
+.propertiesWrapper{
+
+    /* overflow-y: scroll; */
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    height: auto;
+
+}
+
+.propertyInputWrapper{
+
+    display: flex;
+    gap: 5px;
+    flex-direction: row;
+    align-items: baseline;
+
+}
+
+.propertyInput{
+    flex: 1;
+    max-width: 50%
+}
+
+.propertyName{
+    flex: 1;
+}
+
+.terraformSnippetWrapper{
+
+    margin-top: 10px;
+    padding: 12px 14px;
+    background-color: rgb(30, 30, 30);
+    border-radius: 5px;
+    border: solid 1px rgb(15, 15, 15);
+    overflow-x: auto;
+
+}
+
+.terraformSnippetWrapper > pre{
+    margin: 0px;
+}
+
+.terraformCode{
+
+    display: block;
+    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: rgb(214, 214, 214);
+    white-space: pre;
+
+}
+
+.terraformKeyword{
+    color: rgb(209, 67, 209);
+}
+
+.terraformParameter{
+    color: rgb(255, 169, 255);
+}
+
+.terraformBracket{
+    color: yellow;
+}
+
+.terraformProperty{
+    color: white;
+}
+
+.terraformValue{
+    color: rgb(104, 170, 233);
+}
+
+.propertyBlockWrapper{
+    display: flex;
+    flex-direction: column;
+    border-radius: 5px;
+
+    border-left: solid 1px rgb(15, 15, 15);
+    border-bottom: solid 1px rgb(15, 15, 15);
+
+    overflow: hidden;
+    overflow-x: auto;
+}
+
+.propertyBlockWrapper:hover{
+    cursor: pointer;
+}
+
+.propertyRecordSectionSummary{
+    background-color: rgb(105, 105, 105);
+    padding: 5px 10px;
+    word-break: break-word;
+}
+
+.propertyRecordSectionWrapper{
+    background-color: rgb(43, 43, 43);
+    padding: 10px 0px 0px 10px;
+}

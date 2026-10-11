@@ -1,0 +1,23 @@
+
+.imageNode{
+  overflow: hidden;
+  padding: 0px;
+  margin: 0px;
+  border-radius: 7px;
+  border: 2px solid #303238;
+  display: block;
+}
+
+.imageNode:hover{
+  border: 2px solid #4ea5d8;
+  cursor: pointer;
+}
+
+
+.selectedNode{
+
+  border: 2px solid #b8b8b8;
+  border-radius: 7px;
+  box-sizing: border-box;
+  
+}

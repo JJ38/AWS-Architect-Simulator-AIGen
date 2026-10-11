@@ -1,0 +1,11 @@
+.roundedButton{
+    border-radius: 5px;
+    border: 1px solid lightgray;
+    box-shadow: 3px 3px 3px -2px rgba(0, 0, 0, 0.25);
+    padding: 3px 6px;
+    cursor: pointer;
+}
+
+.roundedButton:hover{
+    box-shadow: inset 3px 3px 3px -2px rgba(0, 0, 0, 0.25);
+}

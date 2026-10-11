@@ -1,0 +1,51 @@
+.standardEdge{
+  /* stroke: #1a59b8 !important; */
+
+
+}
+
+.standardEdge:hover{
+    stroke: lightblue;
+}
+
+
+.standardEdge-pulse {
+  stroke-width: 2;
+  fill: none;
+  stroke-dasharray: 8 24;      /* 8px visible dash, 24px gap — repeats along the whole path */
+}
+
+.standardEdge-sync{
+  stroke: rgb(139, 167, 219) !important;
+  animation: standardEdgeSync 1s linear infinite alternate;
+}
+
+.standardEdge-async{
+  stroke: rgb(210, 61, 255) !important;
+  animation: standardEdgeAsync 1s linear infinite;
+}
+
+.standardEdge-pull{
+  stroke: #d15959 !important;
+  animation: standardEdgePull 1s linear infinite;
+}
+
+@keyframes standardEdgeSync {
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+
+@keyframes standardEdgeAsync {
+  to {
+    stroke-dashoffset: -32;  
+  }
+}
+
+
+@keyframes standardEdgePull {
+  to {
+    stroke-dashoffset: 32; 
+  }
+}
