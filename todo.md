@@ -85,11 +85,28 @@ either repositioning the panel or making it collapsible.
       single rps value through the graph using each edge's already-resolved
       `callerID`/`receiverID` (so pull-edge direction is handled automatically
       — no separate pull-vs-push logic needed). Kahn's-algorithm topological
-      walk, fan-in sums multiple incoming edges, multiple entry nodes split
-      the input rate evenly, cycles are detected and zeroed out with a warning.
-      `simulate.ts` calls this once *per traffic-profile point* (so once per
-      day) and sums each node's per-day cost into a period total — this is
-      what makes a spike day cost more than a flat day at the same average
+      walk, fan-in sums multiple incoming edges, cycles are detected and
+      zeroed out with a warning. `simulate.ts` calls this once *per
+      traffic-profile point* (so once per day) and sums each node's per-day
+      cost into a period total — this is what makes a spike day cost more
+      than a flat day at the same average
+- [x] **Bug fix (reported via real usage): adding an unconnected node was
+      decreasing the total cost.** Every node with zero incoming edges counts
+      as an "entry point", and the original code divided the configured
+      traffic rate evenly across however many entry points existed
+      (`entryRps / entryNodeIds.length`). That meant dropping a second,
+      unrelated, not-yet-wired node onto the canvas diluted the traffic (and
+      cost) of the *already-connected* architecture, since they were treated
+      as sharing one traffic budget — violating the basic expectation that
+      adding something can only add cost, never remove it. Fixed: each entry
+      node now independently receives the *full* configured rate rather than
+      a shared fraction. Multiple genuine entry points into one shared
+      backend still correctly sum at the node where their edges converge
+      (the existing fan-in logic was always correct; only the entry-node
+      split was wrong). Verified: placed a connected API Gateway V2 → Lambda
+      pair, noted their per-node costs, added a third *unconnected* S3 node,
+      confirmed the API Gateway/Lambda costs were bit-for-bit identical
+      afterward and the total only grew by exactly the new node's own cost
 - [x] Peak-vs-average aware per-node results: each node's simulation result
       carries both `averageWorkloadRps` and `peakWorkloadRps`/`peakLabel`
       (which day the peak fell on). Capacity-adequacy warnings (EC2 traffic

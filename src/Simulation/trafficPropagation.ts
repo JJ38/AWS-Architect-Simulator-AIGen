@@ -15,6 +15,10 @@ export interface TrafficPropagationResult{
 // (already resolved by CanvasController.onConnect, independent of edge
 // drawing direction - a "pull" edge's caller is the thing doing the pulling)
 // gives us "who calls whom" directly, so traffic flows caller -> receiver.
+//
+// Every node with zero incoming edges (including a node with no edges at all)
+// is an "entry point" and independently receives the full entryRps - see the
+// comment below for why that's not divided among them.
 export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: number): TrafficPropagationResult{
 
     const warnings: string[] = [];
@@ -52,10 +56,19 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
         return { workloadRps, warnings };
     }
 
-    const ratePerEntryNode = entryNodeIds.length > 0 ? entryRps / entryNodeIds.length : 0;
-
+    // Each entry node independently receives the full entryRps - NOT a shared
+    // fraction of it. Splitting it (entryRps / entryNodeIds.length) was the
+    // previous behavior, and it's wrong: it means placing a second, unrelated,
+    // not-yet-connected node on the canvas dilutes the traffic (and therefore
+    // cost) of your already-built, already-connected architecture, since
+    // they'd be treated as sharing one traffic budget. That breaks the basic
+    // invariant that adding a node can only add cost, never remove it. Each
+    // entry point is its own independent source of the configured rate -
+    // multiple real entry points into a shared backend still correctly sum at
+    // the first node where their edges converge (the Kahn's-algorithm fan-in
+    // below already handles that).
     if(entryNodeIds.length > 1){
-        warnings.push(`${entryNodeIds.length} entry points found - traffic split evenly, ${ratePerEntryNode.toFixed(2)} req/s each.`);
+        warnings.push(`${entryNodeIds.length} entry points found - each independently assumed to receive the full ${entryRps.toFixed(2)} req/s (they're treated as separate traffic sources, not a shared budget).`);
     }
 
     // Kahn's algorithm: process nodes once every incoming edge's caller rate
@@ -64,7 +77,7 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
     const accumulatedIncomingRate = new Map<string, number>();
     nodeIds.forEach((id) => accumulatedIncomingRate.set(id, 0));
 
-    entryNodeIds.forEach((id) => accumulatedIncomingRate.set(id, ratePerEntryNode));
+    entryNodeIds.forEach((id) => accumulatedIncomingRate.set(id, entryRps));
 
     const queue: string[] = [...entryNodeIds];
     const processed = new Set<string>();
