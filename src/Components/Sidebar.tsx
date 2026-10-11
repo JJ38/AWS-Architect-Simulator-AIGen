@@ -12,7 +12,8 @@ export default function Sidebar(
         setSelectedService,
         setShowLoadWidget,
         setShowSaveWidget,
-        setShowTerraformWidget
+        setShowTerraformWidget,
+        setShowCostWidget
     }
         :
     {
@@ -21,10 +22,11 @@ export default function Sidebar(
         setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>;
         setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>;
         setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>;
+        setShowCostWidget: React.Dispatch<React.SetStateAction<boolean>>;
     }
 ){
 
-    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget));
+    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget, setShowCostWidget));
 
 
     return  <div className="sidebar">
@@ -48,16 +50,25 @@ export default function Sidebar(
 
 
                 <div>
-                    <SidebarButton  
-                        serviceName={"Terraform"} 
-                        serviceDescription={"Convert to terraform"} 
-                        serviceImg={"terraform_wired.svg"} 
-                        key={"Terraform"} 
+                    <SidebarButton
+                        serviceName={"Terraform"}
+                        serviceDescription={"Convert to terraform"}
+                        serviceImg={"terraform_wired.svg"}
+                        key={"Terraform"}
                         isSelected={false}
                         onClick={() => stateSidebarController.handleTerraformClick()}
                     />
 
-                    <SidebarButton  
+                    <SidebarButton
+                        serviceName={"Cost"}
+                        serviceDescription={"Cost & capacity simulation"}
+                        serviceImg={"cost_icon.svg"}
+                        key={"Cost"}
+                        isSelected={false}
+                        onClick={() => stateSidebarController.handleCostClick()}
+                    />
+
+                    <SidebarButton
                         serviceName={"Load"} 
                         serviceDescription={"Load"} 
                         serviceImg={"load_icon.svg"} 

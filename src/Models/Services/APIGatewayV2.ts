@@ -1,5 +1,6 @@
 import Resource from "../Resource";
-import type { EdgeType, PermissionType, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CostEstimate, EdgeType, PermissionType, ResourceData, Service, ValidationResult } from "../../types.ts";
+import { APIGATEWAYV2_PRICE_PER_MILLION_REQUESTS_USD, monthlyRequests } from "../../Simulation/pricing.ts";
 
 
 export default class APIGatewayV2 extends Resource{
@@ -51,6 +52,19 @@ export default class APIGatewayV2 extends Resource{
 
     toTerraformEdgePropertiesReceiver(edgeType: EdgeType, counterPart: Resource){
         return null;
+    }
+
+    estimateCost(workloadRps: number): CostEstimate {
+
+        const requests = monthlyRequests(workloadRps);
+        const requestCost = requests * APIGATEWAYV2_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
+
+        return {
+            monthlyCostUSD: requestCost,
+            breakdown: { "requests": requestCost },
+            warnings: []
+        };
+
     }
 
 

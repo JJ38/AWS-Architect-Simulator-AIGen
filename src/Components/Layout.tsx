@@ -8,6 +8,7 @@ import NotificationProvider from '../Providers/NotificationProvider.tsx';
 import '../styles/Layout.css';
 import SaveWidget from './Widgets/SaveWidget.tsx';
 import TerraformWidget from './Widgets/TerraformWidget.tsx';
+import CostWidget from './Widgets/CostWidget.tsx';
 import ConfirmationProvider from '../Providers/ConfirmationProvider.tsx';
 
 export default function Layout() {
@@ -19,6 +20,7 @@ export default function Layout() {
     const [stateShowLoadWidget, setShowLoadWidget] = useState<boolean>(false);
     const [stateShowSaveWidget, setShowSaveWidget] = useState<boolean>(false);
     const [stateShowTerraformWidget, setShowTerraformWidget] = useState<boolean>(false);
+    const [stateShowCostWidget, setShowCostWidget] = useState<boolean>(false);
     const [stateLoadedSaveName, setLoadedSaveName] = useState<string | null>(null);
 
 
@@ -33,6 +35,7 @@ export default function Layout() {
                         setShowLoadWidget={setShowLoadWidget}
                         setShowSaveWidget={setShowSaveWidget}
                         setShowTerraformWidget={setShowTerraformWidget}
+                        setShowCostWidget={setShowCostWidget}
                     />
                     <ReactFlowProvider>
                         <Canvas 
@@ -59,7 +62,17 @@ export default function Layout() {
                     }
                     
                     {
-                        stateShowLoadWidget && 
+                        stateShowCostWidget &&
+
+                            <CostWidget
+                                setShowCostWidget={setShowCostWidget}
+                                stateNodes={stateNodes}
+                                stateEdges={stateEdges}
+                            />
+                    }
+
+                    {
+                        stateShowLoadWidget &&
 
                             <LoadWidget
                                 setShowLoadWidget={setShowLoadWidget}

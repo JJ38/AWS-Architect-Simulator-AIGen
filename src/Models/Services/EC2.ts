@@ -1,6 +1,7 @@
 import Resource from "../Resource";
-import type { EdgeType, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CostEstimate, EdgeType, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
+import { EC2_DEFAULT_HOURLY_USD, EC2_HOURLY_USD, HOURS_PER_MONTH } from "../../Simulation/pricing.ts";
 
 export default class EC2 extends Resource{
 
@@ -83,6 +84,39 @@ export default class EC2 extends Resource{
 
     toTerraformEdgePropertiesReceiver(edgeType: EdgeType, counterPart: Resource){
         return null;
+    }
+
+    // EC2 bills for the instance running, not per-request - workloadRps isn't
+    // used in the cost itself, but a high rps relative to instance size is
+    // flagged as a capacity warning (illustrative, not a real utilization model).
+    estimateCost(workloadRps: number): CostEstimate {
+
+        const warnings: string[] = [];
+
+        const instanceType: string | null = this.terraformProperties?.aws_instance?.instance_type?.value ?? null;
+
+        let hourlyUSD = EC2_DEFAULT_HOURLY_USD;
+
+        if(instanceType == null){
+            warnings.push("No instance_type set - using a default small-instance price estimate.");
+        }else if(EC2_HOURLY_USD[instanceType] != undefined){
+            hourlyUSD = EC2_HOURLY_USD[instanceType];
+        }else{
+            warnings.push(`Unrecognised instance_type "${instanceType}" - using a default price estimate.`);
+        }
+
+        const computeCost = hourlyUSD * HOURS_PER_MONTH;
+
+        if(workloadRps > 200){
+            warnings.push("High traffic for a single EC2 instance with no auto scaling group - consider an ASG.");
+        }
+
+        return {
+            monthlyCostUSD: computeCost,
+            breakdown: { "compute": computeCost },
+            warnings: warnings
+        };
+
     }
 
     public validate(): ValidationResult {

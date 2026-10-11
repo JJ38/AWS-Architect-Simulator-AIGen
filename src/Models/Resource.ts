@@ -1,4 +1,4 @@
-import type { CodeChunk, EdgeType, PermissionType, Property, PropertyRecord, ResourceData, Service, ValidationResult } from "../types";
+import type { CodeChunk, CostEstimate, EdgeType, PermissionType, Property, PropertyRecord, ResourceData, Service, ValidationResult } from "../types";
 
 
 export interface ResourceStatics{
@@ -18,6 +18,7 @@ export default abstract class Resource{
     public resourceName: string;
     public terraformProperties: Record<string, PropertyRecord>;
     public iamProperties?: Record<string, PropertyRecord>;
+    public componentProperties: Record<string, PropertyRecord>;
 
 
     public constructor(data: ResourceData){
@@ -26,12 +27,17 @@ export default abstract class Resource{
         this.resourceName = data.resourceName;
         this.terraformProperties = data.terraformProperties;
         this.iamProperties = data.iamProperties;
+        this.componentProperties = data.componentProperties;
     }
-    
+
 
     abstract validate(): ValidationResult;
     abstract toTerraformEdgePropertiesCaller(edgeType: EdgeType, counterPart: Resource, resource?: Resource): Record<string, PropertyRecord> | null;
     abstract toTerraformEdgePropertiesReceiver(edgeType: EdgeType, counterPart: Resource, resource?: Resource): Record<string, PropertyRecord> | null;
+
+    // workloadRps is this node's steady-state incoming requests/sec, as resolved by the
+    // traffic propagation engine (see Simulation/trafficPropagation.ts) - not live traffic.
+    abstract estimateCost(workloadRps: number): CostEstimate;
 
 
     toTerraformPreview(propertyRecords: Record<string, PropertyRecord>[]): CodeChunk[]{

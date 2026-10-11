@@ -123,3 +123,11 @@ export interface CodeChunk{
 }
 
 export type PermissionType = "IAM" | "Service" | "Passive"; // A passive service should only ever show up as a pull source
+
+export interface CostEstimate{
+
+    monthlyCostUSD: number,
+    breakdown: Record<string, number>, // e.g. {"compute": 12.3, "requests": 0.4} - sums to monthlyCostUSD
+    warnings: string[]
+
+}
