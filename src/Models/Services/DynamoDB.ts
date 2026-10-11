@@ -1,6 +1,6 @@
 import type { CostEstimate, EdgeType, PermissionType, ResourceData, Service, ValidationResult } from "../../types";
 import Resource from "../Resource";
-import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, DYNAMODB_ON_DEMAND_PER_MILLION_READ_USD, DYNAMODB_ON_DEMAND_PER_MILLION_WRITE_USD, DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD, DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD, HOURS_PER_MONTH, monthlyRequests } from "../../Simulation/pricing";
+import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, DYNAMODB_ON_DEMAND_PER_MILLION_READ_USD, DYNAMODB_ON_DEMAND_PER_MILLION_WRITE_USD, DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD, DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD, hoursInDuration, requestsOverDuration } from "../../Simulation/pricing";
 
 //incomplete look at all types
 export const dynamodb_billing_mode = [
@@ -76,45 +76,60 @@ export default class DyanmoDB extends Resource{
         return null;
     }
 
-    estimateCost(workloadRps: number): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
         const billingMode: string = this.terraformProperties?.aws_dynamodb_table?.billing_mode?.value ?? "PAY_PER_REQUEST";
-        const requests = monthlyRequests(workloadRps);
 
         if(billingMode === "PROVISIONED"){
 
             const readCapacity: number = this.terraformProperties?.aws_dynamodb_table?.read_capacity?.value ?? 0;
             const writeCapacity: number = this.terraformProperties?.aws_dynamodb_table?.write_capacity?.value ?? 0;
 
-            const readCost = readCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * HOURS_PER_MONTH;
-            const writeCost = writeCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * HOURS_PER_MONTH;
-
-            const requiredReadCapacity = workloadRps * ASSUMED_READ_FRACTION;
-            const requiredWriteCapacity = workloadRps * ASSUMED_WRITE_FRACTION;
-
-            if(readCapacity < requiredReadCapacity || writeCapacity < requiredWriteCapacity){
-                warnings.push(`Provisioned capacity (${readCapacity} RCU / ${writeCapacity} WCU) may be too low for ~${workloadRps.toFixed(1)} req/s - estimate assumes a ${ASSUMED_READ_FRACTION * 100}/${ASSUMED_WRITE_FRACTION * 100} read/write split.`);
-            }
+            const readCost = readCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds);
+            const writeCost = writeCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
 
             return {
-                monthlyCostUSD: readCost + writeCost,
+                costUSD: readCost + writeCost,
                 breakdown: { "read_capacity": readCost, "write_capacity": writeCost },
                 warnings: warnings
             };
 
         }
 
+        const requests = requestsOverDuration(workloadRps, durationSeconds);
         const readCost = requests * ASSUMED_READ_FRACTION * DYNAMODB_ON_DEMAND_PER_MILLION_READ_USD / 1_000_000;
         const writeCost = requests * ASSUMED_WRITE_FRACTION * DYNAMODB_ON_DEMAND_PER_MILLION_WRITE_USD / 1_000_000;
 
         warnings.push(`Assumes a ${ASSUMED_READ_FRACTION * 100}/${ASSUMED_WRITE_FRACTION * 100} read/write request split - the simulation only tracks one traffic number per node.`);
 
         return {
-            monthlyCostUSD: readCost + writeCost,
+            costUSD: readCost + writeCost,
             breakdown: { "read_requests": readCost, "write_requests": writeCost },
             warnings: warnings
         };
+
+    }
+
+    checkCapacityWarnings(peakWorkloadRps: number): string[] {
+
+        const billingMode: string = this.terraformProperties?.aws_dynamodb_table?.billing_mode?.value ?? "PAY_PER_REQUEST";
+
+        if(billingMode !== "PROVISIONED"){
+            return [];
+        }
+
+        const readCapacity: number = this.terraformProperties?.aws_dynamodb_table?.read_capacity?.value ?? 0;
+        const writeCapacity: number = this.terraformProperties?.aws_dynamodb_table?.write_capacity?.value ?? 0;
+
+        const requiredReadCapacity = peakWorkloadRps * ASSUMED_READ_FRACTION;
+        const requiredWriteCapacity = peakWorkloadRps * ASSUMED_WRITE_FRACTION;
+
+        if(readCapacity < requiredReadCapacity || writeCapacity < requiredWriteCapacity){
+            return [`Provisioned capacity (${readCapacity} RCU / ${writeCapacity} WCU) may be too low for peak traffic (~${peakWorkloadRps.toFixed(1)} req/s) - estimate assumes a ${ASSUMED_READ_FRACTION * 100}/${ASSUMED_WRITE_FRACTION * 100} read/write split.`];
+        }
+
+        return [];
 
     }
 

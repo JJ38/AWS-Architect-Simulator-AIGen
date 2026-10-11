@@ -35,9 +35,21 @@ export default abstract class Resource{
     abstract toTerraformEdgePropertiesCaller(edgeType: EdgeType, counterPart: Resource, resource?: Resource): Record<string, PropertyRecord> | null;
     abstract toTerraformEdgePropertiesReceiver(edgeType: EdgeType, counterPart: Resource, resource?: Resource): Record<string, PropertyRecord> | null;
 
-    // workloadRps is this node's steady-state incoming requests/sec, as resolved by the
-    // traffic propagation engine (see Simulation/trafficPropagation.ts) - not live traffic.
-    abstract estimateCost(workloadRps: number): CostEstimate;
+    // workloadRps is this node's steady-state incoming requests/sec for one
+    // slice of the traffic profile (see Simulation/trafficPropagation.ts),
+    // sustained for durationSeconds - the simulation calls this once per
+    // traffic-profile point (e.g. once per day) and sums the results, so the
+    // cost math here must scale with durationSeconds, not assume a month.
+    abstract estimateCost(workloadRps: number, durationSeconds: number): CostEstimate;
+
+    // Optional: capacity-adequacy warnings (e.g. "this instance/table is
+    // undersized for its peak traffic"), checked once against the traffic
+    // profile's peak rps rather than per-day - a provisioned resource can be
+    // fine most of the period and only fall over on the one spike day, so
+    // this is evaluated separately from the per-day cost loop in simulate.ts.
+    checkCapacityWarnings(peakWorkloadRps: number): string[]{
+        return [];
+    }
 
 
     toTerraformPreview(propertyRecords: Record<string, PropertyRecord>[]): CodeChunk[]{

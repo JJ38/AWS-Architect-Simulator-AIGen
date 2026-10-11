@@ -66,34 +66,71 @@ either repositioning the panel or making it collapsible.
 
 ## Track 1 — App: Simulation (cost & capacity)
 
-- [x] Traffic input: single steady-state requests/sec number (`CostWidget`) —
-      not a slider yet, same "one number for now" idea from the original plan
+- [x] Traffic input: a full time-series profile, not a single number —
+      `src/Simulation/trafficProfile.ts`'s `TrafficProfile` is one
+      `{label, rps}` point per day (31 by default). Presets: Flat, Ramp up,
+      Weekly cycle, Holiday spike (a bell-shaped curve around a configurable
+      peak day — the default is tuned like a December/Christmas-week spike
+      for an online shop). `TrafficChart.tsx` renders it as a hand-rolled
+      editable SVG line chart (no charting library) — drag any day's point to
+      reshape the curve; see dataviz-skill notes below
 - [x] Per-node cost formulas from a static, illustrative us-east-1 pricing
       table (`src/Simulation/pricing.ts`) — free tier ignored on purpose
       (keeps the "always pay" numbers easier to reason about and still
-      roughly right at non-trivial traffic)
-- [x] Capacity simulator: `src/Simulation/trafficPropagation.ts` propagates the
-      entry rps through the graph using each edge's already-resolved
+      roughly right at non-trivial traffic). Formulas take
+      `(workloadRps, durationSeconds)` rather than assuming a month, so the
+      same `Resource.estimateCost` works whether it's called once for a flat
+      monthly estimate or once per day across a traffic profile
+- [x] Capacity simulator: `src/Simulation/trafficPropagation.ts` propagates a
+      single rps value through the graph using each edge's already-resolved
       `callerID`/`receiverID` (so pull-edge direction is handled automatically
       — no separate pull-vs-push logic needed). Kahn's-algorithm topological
       walk, fan-in sums multiple incoming edges, multiple entry nodes split
-      the input rate evenly, cycles are detected and zeroed out with a warning
-- [x] `src/Simulation/simulate.ts` orchestrates propagation + each `Resource`
-      subclass's `estimateCost(workloadRps)` into a total + per-node breakdown
-- [x] `CostWidget`/`CostWidgetController` — sidebar button, traffic input, run
-      button, total cost, per-node table with warnings. Smoke-tested via
-      Playwright: API Gateway V2 → Lambda at 50 req/s gives $131.40 + $81.03 =
-      $212.43/month, matches the formulas by hand
-- [ ] Bottleneck detection/highlighting *on the canvas* — currently
-      capacity-related warnings (e.g. DynamoDB provisioned capacity too low,
-      EC2 traffic high for a single instance) only show as text in the cost
-      widget's per-node table, not as node coloring
+      the input rate evenly, cycles are detected and zeroed out with a warning.
+      `simulate.ts` calls this once *per traffic-profile point* (so once per
+      day) and sums each node's per-day cost into a period total — this is
+      what makes a spike day cost more than a flat day at the same average
+- [x] Peak-vs-average aware per-node results: each node's simulation result
+      carries both `averageWorkloadRps` and `peakWorkloadRps`/`peakLabel`
+      (which day the peak fell on). Capacity-adequacy warnings (EC2 traffic
+      too high for one instance, DynamoDB provisioned capacity too low) are
+      checked once against the *peak*, via a new optional
+      `Resource.checkCapacityWarnings(peakWorkloadRps)` hook — kept separate
+      from the per-day cost loop so a resource can be fine most of the period
+      and only flagged for the one spike day, without spamming 31 near-duplicate
+      warnings
+- [x] `CostWidget`/`CostWidgetController` — sidebar button, preset buttons,
+      editable traffic chart, run button, total cost over the period, per-node
+      table (avg/peak req/s, cost, warnings). Smoke-tested via Playwright:
+      placed+connected API Gateway V2 → Lambda, ran the default Holiday-spike
+      profile ($68.89/31 days), switched presets, and dragged a chart point
+      (confirmed the resulting avg/peak numbers moved correctly)
+- [ ] Bottleneck detection/highlighting *on the canvas* — capacity warnings
+      still only show as text in the cost widget's per-node table, not as node
+      coloring
 - [ ] Static design-issue linting independent of traffic (single AZ, no ASG,
       public S3, missing health checks, etc.)
-- [ ] Traffic presets over time (steady, diurnal, spike, ramp) — only a single
-      steady-state number exists today
 - [ ] Latency modeling — cost only so far, no latency estimates
 - [ ] Live AWS Pricing API integration (replace the static table)
+- [ ] Variable period length in the UI — `DEFAULT_PERIOD_DAYS` (31) is
+      currently fixed; the data model supports any length, just no control to
+      change it yet
+- [ ] Calendar-aware day labels ("Dec 24" instead of "Day 24") — the engine is
+      deliberately period-agnostic (not December-specific), so labels are
+      generic; real calendar dates would be a presentation-layer addition
+
+**dataviz-skill notes for `TrafficChart.tsx`** (read before touching chart
+code again): light-mode tokens, not dark — the widgets in this app are white
+modals, even though the canvas itself is dark. Single series needs no legend
+(chart caption names it). Validated series color: `#2a78d6` (categorical slot
+1, passes `validate_palette.js` against surface `#fcfcfb`). Known gotcha hit
+once already: SVG hit-testing is in paint order — a draggable point's larger
+invisible hit-circle must render *after* (on top of) the small visible dot, or
+the dot swallows the pointer events and dragging silently does nothing.
+Second gotcha: don't derive the y-axis domain from live state that the drag
+handler itself is mutating — it creates a feedback loop (domain grows →
+changes how the next pointermove is interpreted → domain grows more); freeze
+the domain for the duration of a drag gesture instead.
 
 **Known v1 simplifications baked into the simulation engine** (documented here
 so they're deliberate, not forgotten):

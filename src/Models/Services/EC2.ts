@@ -1,7 +1,7 @@
 import Resource from "../Resource";
 import type { CostEstimate, EdgeType, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
-import { EC2_DEFAULT_HOURLY_USD, EC2_HOURLY_USD, HOURS_PER_MONTH } from "../../Simulation/pricing.ts";
+import { EC2_DEFAULT_HOURLY_USD, EC2_HOURLY_USD, hoursInDuration } from "../../Simulation/pricing.ts";
 
 export default class EC2 extends Resource{
 
@@ -86,10 +86,10 @@ export default class EC2 extends Resource{
         return null;
     }
 
-    // EC2 bills for the instance running, not per-request - workloadRps isn't
-    // used in the cost itself, but a high rps relative to instance size is
-    // flagged as a capacity warning (illustrative, not a real utilization model).
-    estimateCost(workloadRps: number): CostEstimate {
+    // EC2 bills for the instance running, not per-request - cost scales with
+    // durationSeconds regardless of workloadRps. See checkCapacityWarnings
+    // for the traffic-vs-instance-size check.
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
 
@@ -105,17 +105,23 @@ export default class EC2 extends Resource{
             warnings.push(`Unrecognised instance_type "${instanceType}" - using a default price estimate.`);
         }
 
-        const computeCost = hourlyUSD * HOURS_PER_MONTH;
-
-        if(workloadRps > 200){
-            warnings.push("High traffic for a single EC2 instance with no auto scaling group - consider an ASG.");
-        }
+        const computeCost = hourlyUSD * hoursInDuration(durationSeconds);
 
         return {
-            monthlyCostUSD: computeCost,
+            costUSD: computeCost,
             breakdown: { "compute": computeCost },
             warnings: warnings
         };
+
+    }
+
+    checkCapacityWarnings(peakWorkloadRps: number): string[] {
+
+        if(peakWorkloadRps > 200){
+            return ["High peak traffic for a single EC2 instance with no auto scaling group - consider an ASG."];
+        }
+
+        return [];
 
     }
 

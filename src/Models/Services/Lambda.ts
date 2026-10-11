@@ -1,7 +1,7 @@
 import Resource from "../Resource";
 import type { CostEstimate, EdgeType, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
-import { LAMBDA_ASSUMED_AVG_DURATION_SECONDS, LAMBDA_DEFAULT_MEMORY_MB, LAMBDA_PRICE_PER_GB_SECOND_USD, LAMBDA_PRICE_PER_REQUEST_USD, monthlyRequests } from "../../Simulation/pricing.ts";
+import { LAMBDA_ASSUMED_AVG_DURATION_SECONDS, LAMBDA_DEFAULT_MEMORY_MB, LAMBDA_PRICE_PER_GB_SECOND_USD, LAMBDA_PRICE_PER_REQUEST_USD, requestsOverDuration } from "../../Simulation/pricing.ts";
 
 
 export default class Lambda extends Resource{
@@ -99,7 +99,7 @@ export default class Lambda extends Resource{
 
     }
 
-    estimateCost(workloadRps: number): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
         const memoryMB: number = this.terraformProperties?.aws_lambda_function?.memory_size?.value ?? LAMBDA_DEFAULT_MEMORY_MB;
@@ -108,7 +108,7 @@ export default class Lambda extends Resource{
             warnings.push(`No memory_size set - assuming the default ${LAMBDA_DEFAULT_MEMORY_MB}MB.`);
         }
 
-        const requests = monthlyRequests(workloadRps);
+        const requests = requestsOverDuration(workloadRps, durationSeconds);
         const requestCost = requests * LAMBDA_PRICE_PER_REQUEST_USD;
 
         const gbSeconds = requests * (memoryMB / 1024) * LAMBDA_ASSUMED_AVG_DURATION_SECONDS;
@@ -117,7 +117,7 @@ export default class Lambda extends Resource{
         warnings.push(`Assumes a flat ${LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000}ms average execution time - Terraform's timeout is a max cutoff, not a typical duration, so it isn't used here.`);
 
         return {
-            monthlyCostUSD: requestCost + computeCost,
+            costUSD: requestCost + computeCost,
             breakdown: { "requests": requestCost, "compute": computeCost },
             warnings: warnings
         };

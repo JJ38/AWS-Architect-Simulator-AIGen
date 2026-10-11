@@ -3,11 +3,24 @@
 // Free tiers are deliberately ignored (illustrative "always pay" numbers are
 // easier to reason about and still roughly right at non-trivial traffic).
 
+export const SECONDS_PER_DAY = 24 * 60 * 60;
 export const HOURS_PER_MONTH = 730;
 export const SECONDS_PER_MONTH = HOURS_PER_MONTH * 60 * 60;
 
-export function monthlyRequests(workloadRps: number): number {
-    return workloadRps * SECONDS_PER_MONTH;
+// Cost formulas take a (workloadRps, durationSeconds) pair rather than
+// assuming "sustained for a month" - durationSeconds is however long that
+// workload rate actually applies for (a day, in the traffic-profile
+// simulation; a full month for a quick flat estimate).
+export function requestsOverDuration(workloadRps: number, durationSeconds: number): number {
+    return workloadRps * durationSeconds;
+}
+
+export function hoursInDuration(durationSeconds: number): number {
+    return durationSeconds / 3600;
+}
+
+export function monthFractionOfDuration(durationSeconds: number): number {
+    return durationSeconds / SECONDS_PER_MONTH;
 }
 
 // On-demand Linux, us-east-1, $/hr. Covers the instance types this project

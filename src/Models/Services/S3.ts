@@ -1,6 +1,6 @@
 import Resource from "../Resource";
 import type { CostEstimate, Service, ValidationResult, EdgeType, ResourceData, PermissionType, PropertyRecord } from "../../types.ts";
-import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, S3_GET_PRICE_PER_REQUEST_USD, S3_PUT_PRICE_PER_REQUEST_USD, S3_STORAGE_PER_GB_MONTH_USD, monthlyRequests } from "../../Simulation/pricing.ts";
+import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, S3_GET_PRICE_PER_REQUEST_USD, S3_PUT_PRICE_PER_REQUEST_USD, S3_STORAGE_PER_GB_MONTH_USD, monthFractionOfDuration, requestsOverDuration } from "../../Simulation/pricing.ts";
 
 
 export default class S3 extends Resource{
@@ -85,7 +85,7 @@ export default class S3 extends Resource{
 
     }
 
-    estimateCost(workloadRps: number): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
         const storageGB: number = this.componentProperties?.simulation?.estimated_storage_gb?.value ?? 0;
@@ -94,9 +94,9 @@ export default class S3 extends Resource{
             warnings.push("No estimated_storage_gb set - storage cost assumed to be $0.");
         }
 
-        const storageCost = storageGB * S3_STORAGE_PER_GB_MONTH_USD;
+        const storageCost = storageGB * S3_STORAGE_PER_GB_MONTH_USD * monthFractionOfDuration(durationSeconds);
 
-        const requests = monthlyRequests(workloadRps);
+        const requests = requestsOverDuration(workloadRps, durationSeconds);
         const requestCost =
             requests * ASSUMED_READ_FRACTION * S3_GET_PRICE_PER_REQUEST_USD +
             requests * ASSUMED_WRITE_FRACTION * S3_PUT_PRICE_PER_REQUEST_USD;
@@ -104,7 +104,7 @@ export default class S3 extends Resource{
         warnings.push(`Assumes a ${ASSUMED_READ_FRACTION * 100}/${ASSUMED_WRITE_FRACTION * 100} read/write request split - the simulation only tracks one traffic number per node.`);
 
         return {
-            monthlyCostUSD: storageCost + requestCost,
+            costUSD: storageCost + requestCost,
             breakdown: { "storage": storageCost, "requests": requestCost },
             warnings: warnings
         };

@@ -8,10 +8,10 @@
     left: 50%;
     top: 50%;
 
-    max-height: 80vh;
-    max-width: 80vw;
+    max-height: 85vh;
+    max-width: 90vw;
 
-    width: max-content;
+    width: 800px;
 
     transform: translate(-50%, -50%);
     padding: 20px;
@@ -33,11 +33,23 @@
     color: #555;
 }
 
-.costWidgetInputRow{
+.costWidgetPresetRow{
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.costWidgetPresetLabel{
+    font-size: 0.85em;
+    color: #555;
+}
+
+.costWidgetChartCaption{
+    margin: 0px;
+    font-size: 0.8em;
+    color: #555;
 }
 
 .costWidgetResults{

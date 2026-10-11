@@ -1,6 +1,6 @@
 import Resource from "../Resource";
 import type { CostEstimate, EdgeType, PermissionType, ResourceData, Service, ValidationResult } from "../../types.ts";
-import { SQS_PRICE_PER_MILLION_REQUESTS_USD, monthlyRequests } from "../../Simulation/pricing.ts";
+import { SQS_PRICE_PER_MILLION_REQUESTS_USD, requestsOverDuration } from "../../Simulation/pricing.ts";
 
 export default class SQS extends Resource{
 
@@ -50,13 +50,13 @@ export default class SQS extends Resource{
         return null;
     }
 
-    estimateCost(workloadRps: number): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
-        const requests = monthlyRequests(workloadRps);
+        const requests = requestsOverDuration(workloadRps, durationSeconds);
         const requestCost = requests * SQS_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
 
         return {
-            monthlyCostUSD: requestCost,
+            costUSD: requestCost,
             breakdown: { "requests": requestCost },
             warnings: []
         };

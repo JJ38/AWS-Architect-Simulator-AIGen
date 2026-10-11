@@ -126,8 +126,8 @@ export type PermissionType = "IAM" | "Service" | "Passive"; // A passive service
 
 export interface CostEstimate{
 
-    monthlyCostUSD: number,
-    breakdown: Record<string, number>, // e.g. {"compute": 12.3, "requests": 0.4} - sums to monthlyCostUSD
+    costUSD: number, // cost for whatever durationSeconds was passed to estimateCost() - not necessarily a month
+    breakdown: Record<string, number>, // e.g. {"compute": 12.3, "requests": 0.4} - sums to costUSD
     warnings: string[]
 
 }
