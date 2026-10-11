@@ -1,52 +1,52 @@
 
 .react-flow {
-  --xy-background-color: #f7f9fb;
+  --xy-background-color: #edf2f6;
   /* Custom Variables */
-  --xy-theme-selected: #f57dbd;
-  --xy-theme-hover: #c5c5c5;
-  --xy-theme-edge-hover: rgb(211, 13, 13);
-  --xy-theme-color-focus: #e8e8e8;
- 
+  --xy-theme-selected: #136e89;
+  --xy-theme-hover: #aec3d1;
+  --xy-theme-edge-hover: #136e89;
+  --xy-theme-color-focus: #d7e3ea;
+
   /* Built-in Variables see https://reactflow.dev/learn/customization/theming */
   /* --xy-node-border-default: 1px solid #ededed; */
- 
+
   --xy-node-boxshadow-default: 0px 3.54px 4.55px 0px #00000005, 0px 3.54px 4.55px 0px #0000000d, 0px 0.51px 1.01px 0px #0000001a;
- 
+
   --xy-node-border-radius-default: 8px;
- 
+
   --xy-handle-background-color-default: #ffffff;
-  --xy-handle-border-color-default: #aaaaaa;
- 
-  --xy-edge-label-color-default: #505050;
+  --xy-handle-border-color-default: #4c6478;
+
+  --xy-edge-label-color-default: #4c6478;
   --xy-node-background-color-default: #ffffff;
   --xy-theme-panel-bg: #ffffff;
-  --xy-theme-panel-text: #111827;
+  --xy-theme-panel-text: #0f2238;
   --xy-theme-resize-handle-bg: #ffffff;
-  --xy-theme-focus-border: #d9d9d9;
-  --xy-theme-muted-bg: #f3f4f6;
-  --xy-theme-subtle-border: #d1d5db;
+  --xy-theme-focus-border: #aec3d1;
+  --xy-theme-muted-bg: #f4f8fa;
+  --xy-theme-subtle-border: #d7e3ea;
 }
- 
+
 .react-flow.dark {
-  --xy-background-color: #101012;
-  --xy-node-background-color-default: #1a1b1e;
+  --xy-background-color: #0e1c2e;
+  --xy-node-background-color-default: #152a42;
   /* --xy-node-border-default: 1px solid #303238; */
-  --xy-handle-background-color-default: #141519;
-  --xy-handle-border-color-default: #5a5d66;
-  --xy-edge-label-color-default: #e6e7ea;
-  --xy-theme-hover: #7a7d86;
-  --xy-theme-edge-hover: #4b77cf;
-  --xy-theme-panel-bg: #141519;
-  --xy-theme-panel-text: #f3f4f6;
-  --xy-theme-resize-handle-bg: #141519;
-  --xy-theme-focus-border: #5f6470;
-  --xy-theme-muted-bg: #24262c;
-  --xy-theme-subtle-border: #3f434c;
+  --xy-handle-background-color-default: #152a42;
+  --xy-handle-border-color-default: #5fd4ee;
+  --xy-edge-label-color-default: #9fb9cc;
+  --xy-theme-hover: #5fd4ee;
+  --xy-theme-edge-hover: #5fd4ee;
+  --xy-theme-panel-bg: #152a42;
+  --xy-theme-panel-text: #eaf3f8;
+  --xy-theme-resize-handle-bg: #152a42;
+  --xy-theme-focus-border: rgba(95, 212, 238, 0.4);
+  --xy-theme-muted-bg: #1d3650;
+  --xy-theme-subtle-border: rgba(95, 212, 238, 0.22);
   --xy-node-boxshadow-default: none;
-  --xy-theme-color-focus: #4b4e57;
-  --color-background: #1a1b1e;
-  --color-hover-bg: #24262c;
-  --color-disabled: #8b9099;
+  --xy-theme-color-focus: rgba(95, 212, 238, 0.22);
+  --color-background: #152a42;
+  --color-hover-bg: #1d3650;
+  --color-disabled: #6e899d;
 }
  
 .react-flow {

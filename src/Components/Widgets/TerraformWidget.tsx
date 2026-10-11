@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { Download, Upload, X } from "lucide-react";
 import { TerraformWidgetController } from "../../Controllers/TerraformWidgetController";
 import { useNotification } from "../../Providers/NotificationProvider";
 import RoundedButton from "../Buttons/RoundedButton";
+import IconButton from "../Buttons/IconButton";
 import '../../styles/TerraformWidget.css';
 import type { AppEdge, AppNode, CodeChunk } from "../../types";
 import { InputsRenderer } from "../Helpers/InputsRenderer";
@@ -128,38 +130,42 @@ export default function TerraformWidget({
                     {
                         !stateShowDownloadTerraformForm &&
 
-                            <RoundedButton
+                            <IconButton
                                 onClickHandler={() => stateTerraformWidgetController.handleCancelClick()}
-                                buttonText='Cancel'
+                                icon={X}
+                                label='Cancel'
                             />
                     }
-                        
+
                     {
 
                         stateShowDownloadTerraformForm &&
 
-                            <RoundedButton
+                            <IconButton
                                 onClickHandler={() => stateTerraformWidgetController.handleCancelDownloadClick()}
-                                buttonText='Cancel Download'
+                                icon={X}
+                                label='Cancel download'
                             />
                     }
 
                     {
                         !stateShowDownloadTerraformForm &&
-                    
-                            <RoundedButton
+
+                            <IconButton
                                 onClickHandler={() => stateTerraformWidgetController.handleUploadClick()}
-                                buttonText='Upload'
+                                icon={Upload}
+                                label='Upload'
                             />
 
                     }
-                    
+
                     {
                         !stateShowDownloadTerraformForm &&
 
-                        <RoundedButton
+                        <IconButton
                             onClickHandler={() => stateTerraformWidgetController.handleDownloadClick(stateNodes)}
-                            buttonText='Download'
+                            icon={Download}
+                            label='Download'
                         />
                     }
 

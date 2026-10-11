@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react';
+import { Background, BackgroundVariant, ReactFlow, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react';
 import type { AppEdge, AppNode, Service } from '../types.ts';
 import { CanvasController } from '../Controllers/CanvasController.ts';
 import '@xyflow/react/dist/style.css';
@@ -7,7 +7,9 @@ import '../styles/Canvas.css';
 import PropertiesWidget from './Widgets/PropertiesWidget.tsx';
 import ViewLayerSwitcher from './ViewLayerSwitcher.tsx';
 import type { CanvasView } from './ViewLayerSwitcher.tsx';
+import ThemeToggle from './ThemeToggle.tsx';
 import { useNotification } from '../Providers/NotificationProvider.tsx';
+import { useTheme } from '../Providers/ThemeProvider.tsx';
 import type { SimulationResult } from '../Simulation/simulate.ts';
 
 export default function Canvas(
@@ -42,6 +44,7 @@ export default function Canvas(
   const { screenToFlowPosition } = useReactFlow();
 
   const showNotification = useNotification();
+  const { theme } = useTheme();
 
   const [stateCanvasController] = useState(() => new CanvasController(
     showNotification,
@@ -125,10 +128,15 @@ export default function Canvas(
         onPaneClick={(event) => stateCanvasController.handlePaneClick(event, stateSelectedService, stateNodes)}
         onPaneMouseMove={(event) => stateCanvasController.handlePaneMouseMove(event, stateSelectedService)}
         snapGrid={[20,20]}
-        colorMode='dark'//dark, light, system
+        colorMode={theme}
         elementsSelectable={false}
-      />
-      <ViewLayerSwitcher canvasView={stateCanvasView} setCanvasView={setCanvasView} />
+      >
+        <Background variant={BackgroundVariant.Lines} gap={20} color="var(--border)" />
+      </ReactFlow>
+      <div className="canvasTopRightControls">
+        <ViewLayerSwitcher canvasView={stateCanvasView} setCanvasView={setCanvasView} />
+        <ThemeToggle />
+      </div>
       <PropertiesWidget
         stateSelectedNodeID={stateSelectedNodeID} 
         selectedNodeData={selectedNode?.data}

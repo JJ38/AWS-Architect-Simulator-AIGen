@@ -1,24 +1,27 @@
 .notification{
 
     position: absolute;
-    border-radius: 5px;
-    padding: 2px 12px;
+    border-radius: 6px;
+    padding: 6px 14px;
     color: white;
+    font-family: var(--font-sans);
+    box-shadow: 0 2px 10px var(--shadow);
     right: 20px;
     top: 20px;
+    z-index: 30;
 
 }
 
 .success{
 
-    border: 2px solid rgb(60, 208, 60);
-    background-color: rgb(80, 228, 80);
+    border: 1px solid var(--success);
+    background-color: var(--success);
 
 }
 
 .failure{
 
-    border: 2px solid rgb(235, 68, 68);
-    background-color: rgb(238, 100, 100);
+    border: 1px solid var(--danger);
+    background-color: var(--danger);
 
 }

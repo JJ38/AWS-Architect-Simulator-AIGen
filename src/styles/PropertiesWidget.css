@@ -2,20 +2,23 @@
     position: absolute;
     left: 15px;
     top: 15px;
-    border-radius: 5px;
-    border: 2px solid rgb(20, 20, 20);
+    border-radius: 8px;
+    border: 1px solid var(--border);
     padding: 10px;
     min-width: 200px;
     max-width: 300px;
     max-height: 80%;
-    background-color: rgb(60, 60, 60);
-    color: white;
+    background-color: var(--surface-panel);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    box-shadow: 0 2px 10px var(--shadow);
     overflow-y: auto;
 }
 
 .propertyInfo{
     font-size: 0.8rem;
     margin: 0px 5px 10px 5px;
+    color: var(--text-secondary);
 }
 
 .checkboxWrapper{
@@ -44,20 +47,31 @@
 
 .propertyInput{
     flex: 1;
-    max-width: 50%
+    max-width: 50%;
+    background-color: var(--surface-panel-raised);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    padding: 2px 6px;
 }
 
 .propertyName{
     flex: 1;
+    font-size: 0.9em;
 }
 
+/* The Terraform preview stays a dark console regardless of the app theme -
+   like a code editor, it reads as a terminal/code surface rather than UI
+   chrome, so it doesn't follow the light/dark toggle. */
 .terraformSnippetWrapper{
 
     margin-top: 10px;
     padding: 12px 14px;
-    background-color: rgb(30, 30, 30);
-    border-radius: 5px;
-    border: solid 1px rgb(15, 15, 15);
+    background-color: #16181c;
+    border-radius: 6px;
+    border: solid 1px #272a30;
     overflow-x: auto;
 
 }
@@ -69,7 +83,7 @@
 .terraformCode{
 
     display: block;
-    font-family: "Cascadia Code", Consolas, "SFMono-Regular", Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 0.78rem;
     line-height: 1.5;
     color: rgb(214, 214, 214);
@@ -102,8 +116,8 @@
     flex-direction: column;
     border-radius: 5px;
 
-    border-left: solid 1px rgb(15, 15, 15);
-    border-bottom: solid 1px rgb(15, 15, 15);
+    border-left: solid 1px var(--border);
+    border-bottom: solid 1px var(--border);
 
     overflow: hidden;
     overflow-x: auto;
@@ -114,12 +128,12 @@
 }
 
 .propertyRecordSectionSummary{
-    background-color: rgb(105, 105, 105);
+    background-color: var(--surface-panel-raised);
+    color: var(--text-secondary);
     padding: 5px 10px;
     word-break: break-word;
 }
 
 .propertyRecordSectionWrapper{
-    background-color: rgb(43, 43, 43);
     padding: 10px 0px 0px 10px;
 }

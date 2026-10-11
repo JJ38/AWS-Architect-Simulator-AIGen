@@ -1,17 +1,12 @@
 .viewLayerSwitcher{
 
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 15;
-
     display: flex;
     flex-direction: row;
-    background-color: white;
-    border: 1px solid black;
+    background-color: var(--surface-panel);
+    border: 1px solid var(--border);
     border-radius: 999px;
     padding: 3px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 4px var(--shadow);
 
 }
 
@@ -21,21 +16,25 @@
     background: none;
     border-radius: 999px;
     padding: 6px 14px;
+    font-family: var(--font-sans);
     font-size: 0.85em;
     cursor: pointer;
-    color: #333;
+    color: var(--text-secondary);
+    transition: background-color 0.15s ease, color 0.15s ease;
 
 }
 
 .viewLayerSwitcherButton:hover{
-    background-color: #eee;
+    background-color: var(--surface-panel-raised);
+    color: var(--text-primary);
 }
 
 .viewLayerSwitcherButtonActive{
-    background-color: #2a78d6;
-    color: white;
+    background-color: var(--accent);
+    color: var(--accent-contrast);
 }
 
 .viewLayerSwitcherButtonActive:hover{
-    background-color: #2a78d6;
+    background-color: var(--accent);
+    color: var(--accent-contrast);
 }

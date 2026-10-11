@@ -10,6 +10,7 @@ import SaveWidget from './Widgets/SaveWidget.tsx';
 import TerraformWidget from './Widgets/TerraformWidget.tsx';
 import TrafficPuck from './Widgets/TrafficPuck.tsx';
 import ConfirmationProvider from '../Providers/ConfirmationProvider.tsx';
+import ThemeProvider from '../Providers/ThemeProvider.tsx';
 import type { CanvasView } from './ViewLayerSwitcher.tsx';
 import { runSimulation } from '../Simulation/simulate.ts';
 import { DEFAULT_PERIOD_DAYS, createSpikeProfile } from '../Simulation/trafficProfile.ts';
@@ -35,6 +36,7 @@ export default function Layout() {
 
 
     return (
+        <ThemeProvider>
         <NotificationProvider>
             <ConfirmationProvider>
                 <div className="layout">
@@ -106,6 +108,7 @@ export default function Layout() {
                 </div>
             </ConfirmationProvider>
         </NotificationProvider>
+        </ThemeProvider>
     );
 }
 

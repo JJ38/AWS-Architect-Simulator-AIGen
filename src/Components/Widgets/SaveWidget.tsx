@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { useNotification } from '../../Providers/NotificationProvider';
 import { SaveWidgetController } from '../../Controllers/SaveWidgetController';
 import '../../styles/SaveWidget.css'
 import RoundedButton from '../Buttons/RoundedButton'
+import IconButton from '../Buttons/IconButton'
 import type { AppEdge, AppNode } from '../../types';
 
 export default function SaveWidget({ 
@@ -33,11 +35,12 @@ export default function SaveWidget({
 
             <div className="saveWidgetButtonWrapper">
 
-                <RoundedButton
+                <IconButton
                     onClickHandler={() => stateSaveWidgetController.handleCancelClick()}
-                    buttonText='Cancel'
+                    icon={X}
+                    label='Cancel'
                 />
-                
+
                 {
 
                     stateLoadedSaveName &&

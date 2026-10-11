@@ -9,14 +9,14 @@
 }
 
 .imageNode:hover{
-  border: 2px solid #4ea5d8;
+  border: 2px solid var(--accent);
   cursor: pointer;
 }
 
 
 .selectedNode{
 
-  border: 2px solid #b8b8b8;
+  border: 2px solid var(--accent);
   border-radius: 7px;
   box-sizing: border-box;
 
@@ -34,16 +34,19 @@
   bottom: -18px;
   left: 50%;
   transform: translateX(-50%);
-  background-color: rgba(20, 20, 20, 0.85);
-  color: white;
+  background-color: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
   font-size: 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   padding: 2px 6px;
   border-radius: 4px;
   white-space: nowrap;
   pointer-events: none;
+  box-shadow: 0 1px 4px var(--shadow);
 }
 
 .imageNodeBadge-cost{
-  background-color: rgba(42, 120, 214, 0.9);
+  border-color: var(--accent);
+  color: var(--accent);
 }

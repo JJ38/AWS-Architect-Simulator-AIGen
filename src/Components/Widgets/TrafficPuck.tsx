@@ -1,7 +1,9 @@
 import { useState } from "react";
+import { ExternalLink, Minimize2, PanelLeft, PanelRight } from "lucide-react";
 import { TrafficPuckController } from "../../Controllers/TrafficPuckController";
 import type { TrafficPuckMode } from "../../Controllers/TrafficPuckController";
 import RoundedButton from "../Buttons/RoundedButton";
+import IconButton from "../Buttons/IconButton";
 import TrafficChart from "./TrafficChart";
 import TrafficSparkline from "./TrafficSparkline";
 import '../../styles/TrafficPuck.css';
@@ -58,10 +60,10 @@ function CostBreakdownTable({ simulationResult }: { simulationResult: Simulation
                             simulationResult.perNode.map((nodeResult) =>
                                 <tr key={nodeResult.nodeId}>
                                     <td>{nodeResult.serviceName}</td>
-                                    <td>{nodeResult.nodeId}</td>
-                                    <td>{nodeResult.averageWorkloadRps.toFixed(2)}</td>
-                                    <td>{nodeResult.peakWorkloadRps.toFixed(2)} ({nodeResult.peakLabel})</td>
-                                    <td>${nodeResult.costUSD.toFixed(2)}</td>
+                                    <td className="trafficPuckTableMono">{nodeResult.nodeId}</td>
+                                    <td className="trafficPuckTableMono">{nodeResult.averageWorkloadRps.toFixed(2)}</td>
+                                    <td className="trafficPuckTableMono">{nodeResult.peakWorkloadRps.toFixed(2)} ({nodeResult.peakLabel})</td>
+                                    <td className="trafficPuckTableMono">${nodeResult.costUSD.toFixed(2)}</td>
                                     <td>
                                         {
                                             nodeResult.warnings.map((warning, index) =>
@@ -115,7 +117,7 @@ export default function TrafficPuck(
         return (
             <div className="trafficPuckCollapsed" onClick={() => statePuckController.handleExpandClick()}>
                 <TrafficSparkline points={stateTrafficProfile.points} />
-                <span className="trafficPuckCollapsedTotal">${simulationResult.totalCostUSD.toFixed(0)}/period</span>
+                <span className="trafficPuckCollapsedTotal">${simulationResult.totalCostUSD.toFixed(0)} / {simulationResult.periodDays}d</span>
             </div>
         );
 
@@ -137,13 +139,13 @@ export default function TrafficPuck(
                 <div className="trafficPuckHeaderButtons">
                     {
                         isDocked
-                            ? <RoundedButton onClickHandler={() => statePuckController.handleUndockClick()} buttonText='Undock' />
+                            ? <IconButton onClickHandler={() => statePuckController.handleUndockClick()} icon={ExternalLink} label='Undock' />
                             : <>
-                                <RoundedButton onClickHandler={() => statePuckController.handleDockLeftClick()} buttonText='Dock left' />
-                                <RoundedButton onClickHandler={() => statePuckController.handleDockRightClick()} buttonText='Dock right' />
+                                <IconButton onClickHandler={() => statePuckController.handleDockLeftClick()} icon={PanelLeft} label='Dock to left side' />
+                                <IconButton onClickHandler={() => statePuckController.handleDockRightClick()} icon={PanelRight} label='Dock to right side' />
                               </>
                     }
-                    <RoundedButton onClickHandler={() => statePuckController.handleCollapseClick()} buttonText='Collapse' />
+                    <IconButton onClickHandler={() => statePuckController.handleCollapseClick()} icon={Minimize2} label='Collapse' />
                 </div>
 
             </div>

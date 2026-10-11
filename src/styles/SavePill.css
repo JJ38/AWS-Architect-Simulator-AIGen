@@ -1,21 +1,24 @@
 .savePill{
 
     border-radius: 5px;
-    border: 1px solid black;
-    padding: 0px 6px;
-    line-height: 6px;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    padding: 4px 8px;
+    line-height: 1.4;
 }
 
 
 .savePill:hover{
 
-    border: 1px solid blue;
+    border-color: var(--accent);
     cursor: pointer;
 
 }
 
 .selectedSave{
-    
-    border: 1px solid blue;
+
+    border-color: var(--accent);
+    color: var(--accent);
 
 }

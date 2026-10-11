@@ -8,6 +8,7 @@
 
 .formSection h5{
     margin: 0px;
+    color: var(--text-primary);
 }
 
 .terraformWidgetWrapper{
@@ -19,7 +20,7 @@
     position: absolute;
     left: 50%;
     top: 50%;
-    
+
     max-height: 80vh;
     max-width: 80vw;
 
@@ -27,9 +28,13 @@
 
     transform: translate(-50%, -50%);
     padding: 20px;
-    border: 1px solid black;
-    border-radius: 5px;
-    background-color: white;
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--accent);
+    border-radius: 8px;
+    background-color: var(--surface-panel);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    box-shadow: 0 4px 20px var(--shadow);
     z-index: 10;
 
 }
@@ -44,9 +49,10 @@
 
 .terraformTab{
     float: left;
-    background: #eee;
+    background: var(--surface-panel-raised);
+    color: var(--text-secondary);
     padding: 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--border);
     margin-left: -1px;
     position: relative;
     left: 1px;
@@ -54,18 +60,21 @@
 }
 
 .terraformTab:hover{
-    background: #cdf3f3;
+    background: var(--surface-panel);
+    color: var(--text-primary);
 }
 
+/* The Terraform code preview stays a dark console regardless of the app
+   theme - same reasoning as PropertiesWidget's terraform snippet. */
 .terraformWidgetSnippetWrapper{
 
     display: none;
     clear: both;
     margin-top: 10px;
     padding: 0px 30px;
-    background-color: rgb(30, 30, 30);
-    border-radius: 5px;
-    border: solid 1px rgb(15, 15, 15);
+    background-color: #16181c;
+    border-radius: 6px;
+    border: solid 1px #272a30;
     overflow-y: scroll;
     max-height: 60vh;
     min-width: 550px;
@@ -74,11 +83,11 @@
 }
 
 .terraformTabRadio:checked + .terraformTab {
-  background: white;
-  border-bottom: 1px solid white;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--surface-panel);
   z-index: 2;
 }
-
 
 #tab-main:checked ~ #panel-main,
 #tab-nodes:checked ~ #panel-nodes,
@@ -97,13 +106,10 @@
 .terraformSettingsInputsWrapper{
 
     border-radius: 5px;
-    /* border: 2px solid rgb(20, 20, 20); */
-    /* padding: 10px; */
     min-width: 200px;
     max-width: 300px;
     max-height: 80%;
-    /* background-color: rgb(60, 60, 60); */
-    color: white;
+    color: var(--text-primary);
     overflow-y: auto;
 
 }

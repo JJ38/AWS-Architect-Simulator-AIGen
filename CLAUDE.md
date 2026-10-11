@@ -151,6 +151,54 @@ The **`terraform/`** directory is unrelated to the app's own architecture-
 visualization feature — it provisions the AWS infra to *host* this app
 (Track 2), starting with a remote state backend (S3 + DynamoDB lock).
 
+## Design system ("Blueprint")
+
+A deliberate visual identity, not the framework defaults — chosen to tie into
+the subject matter (this *is* an architecture-diagramming tool): navy/cyan
+drafting-table colors, light = pale drafting paper, dark = blueprint-at-night.
+Built with the `frontend-design` skill; re-read it before making further
+visual changes rather than improvising new colors/type ad hoc.
+
+- **Tokens live in `src/styles/theme.css`** as CSS custom properties, scoped
+  both via `@media (prefers-color-scheme: dark)` (follows the OS by default)
+  and an explicit `:root[data-theme]` override (the toggle). Every other
+  component CSS file should reference these (`var(--surface-panel)`,
+  `var(--text-primary)`, `var(--accent)`, `var(--border)`, `var(--shadow)`,
+  etc.) rather than hardcoding hex — that's what makes the whole app
+  theme-able instead of just the canvas. `ThemeProvider.tsx` (wraps `Layout`,
+  same Context+Provider pattern as `NotificationProvider`) owns the toggle,
+  persists the choice to `localStorage`, and sets the `data-theme` attribute
+  on `<html>`; `useTheme()` reads it (Canvas uses it directly for React
+  Flow's `colorMode` prop, since that's a separate theming mechanism React
+  Flow owns via its own `.react-flow`/`.react-flow.dark` CSS classes —
+  `xy-theme.css`'s two variable blocks are kept in sync with the blueprint
+  palette by hand, they don't read the CSS custom properties).
+- **Two separate color families, deliberately decoupled**: `--chart-*`
+  tokens (gridline/axis/series) match the dataviz skill's validated
+  categorical blue exactly — chart accuracy/accessibility shouldn't be
+  coupled to the brand accent, which is free to be a different hue
+  (`--accent`, the blueprint cyan/teal). Don't reuse `--accent` for chart
+  data or `--chart-series` for UI chrome.
+- **Typefaces**: IBM Plex Sans (`--font-sans`, UI/body text) + IBM Plex Mono
+  (`--font-mono`, node IDs, terraform preview, and numeric table columns
+  specifically — not whole tables; see `TrafficPuck.tsx`'s `.trafficPuckTableMono`
+  for the pattern of applying mono per-cell rather than per-table). Loaded via
+  Google Fonts `<link>` in `index.html`, with a system-sans/monospace fallback
+  stack.
+- **The Terraform code preview panels** (`PropertiesWidget.css`'s
+  `.terraformSnippetWrapper`, `TerraformWidget.css`'s
+  `.terraformWidgetSnippetWrapper`) are a deliberate exception — they stay a
+  fixed dark console regardless of the app theme, like a code editor. Don't
+  theme-ify these; it's an intentional, signature "terminal" surface.
+- **Icons**: `lucide-react`, via a shared `IconButton` component
+  (`src/Components/Buttons/IconButton.tsx` + `.css`) for icon-only actions —
+  always pass `label` (renders as both `title` tooltip and `aria-label`, icon
+  buttons are never unlabeled). Use icons for spatial/universal actions
+  (dock left/right, undock, collapse, close, save, delete, download, upload)
+  where the pictogram is unambiguous and standard; keep text (`RoundedButton`)
+  for named/domain-specific choices where an icon would be guessing (traffic
+  presets, "Save As" vs "Save", "Convert to terraform").
+
 ## Working conventions
 
 - This repo is built primarily by Claude with minimal check-ins, by explicit

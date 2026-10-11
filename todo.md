@@ -12,7 +12,9 @@ ranges, not precision). Two loosely-coupled tracks — Track 1 (app) first, Trac
       state is plain `useState` lifted to `Layout`)
 - [x] Core JSON schema: `ResourceData`/`EdgeData` (`src/types.ts`) — id, service,
       Terraform/component/IAM property records, metadata
-- [x] Render a basic canvas: pan/zoom, background grid, controls
+- [x] Render a basic canvas: pan/zoom, background grid, controls (the grid
+      itself — React Flow's `<Background>` — was actually missing until the
+      design pass below added it; this checkbox was stale)
 - [x] Service catalog: EC2, S3, Lambda, API Gateway V2, SQS, DynamoDB
       (`src/constants.ts`) — smaller than the original ~10-15 target; ALB, RDS,
       CloudFront, Route53, ElastiCache still unmodelled
@@ -258,6 +260,45 @@ so they're deliberate, not forgotten):
 Keep the simulation engine as plain framework-free TS functions (graph +
 traffic in, metrics out) — see `src/Simulation/` — testable, and keeps sim
 logic out of components.
+
+## Track 1 — App: Visual design ("Blueprint" theme + light/dark)
+
+- [x] Deliberate design pass (per explicit feedback that the UI "looks a bit"
+      generic) — used the `frontend-design` skill rather than improvising.
+      Landed on a "blueprint drafting table" concept: navy/cyan, tied to the
+      actual subject matter (this is a diagram tool), not a default SaaS
+      look. Full token system in `src/styles/theme.css` — see the "Design
+      system" section in `CLAUDE.md` for the details other work should
+      follow (token names, the chart-vs-UI color split, where icons vs text
+      are the right call). Highlights:
+      - Light/dark theme toggle (`ThemeProvider.tsx`, sun/moon `IconButton`
+        top-right of canvas), follows the OS by default, persists to
+        `localStorage` once toggled. Covers the *whole* app, not just the
+        canvas — every widget/modal was swept from hardcoded hex to the
+        token system so nothing is stuck light-only or dark-only anymore
+      - IBM Plex Sans + IBM Plex Mono (the latter specifically for node IDs,
+        terraform preview, and numeric table columns — not applied
+        blanket-wide)
+      - React Flow's own background grid (`<Background>`) was actually never
+        added before this pass, despite `colorMode='dark'` being hardcoded —
+        now theme-aware (`colorMode={theme}`) with a `Lines` variant grid
+        that reads as literal blueprint/graph paper
+      - `lucide-react` + a shared `IconButton` — converted the explicitly-
+        flagged "Dock left"/"Dock right"/"Undock"/"Collapse" text buttons on
+        `TrafficPuck`, plus Cancel/Delete/Upload/Download across the other
+        modals, to icon buttons (always with a `label` → tooltip + aria-label).
+        Left text buttons where an icon would be guessing (traffic presets,
+        Save vs Save As, "Convert to terraform")
+      - Fixed the `/period` copy on the collapsed puck to show the actual
+        period length (`$212 / 31d`) instead of the generic word "period" —
+        the expanded view already said "over 31 days" correctly, only the
+        collapsed pill had the vague version
+      - Parked, not built: a cost color-heatmap on canvas nodes was
+        considered and explicitly deferred last session ("expensive compared
+        to what?" — no baseline defined yet); still true here, still just a
+        debug-style `$X.XX`/`X.X req/s` badge, no node tinting
+- [ ] Icon-only buttons are at a fixed 30×30px regardless of viewport —
+      no responsive/mobile pass has been done anywhere in the app
 
 ## Track 2 — Host on AWS via Terraform (after Track 1 has something to deploy)
 

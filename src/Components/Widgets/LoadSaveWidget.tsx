@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Trash2, X } from 'lucide-react';
 import { LoadSaveWidgetController } from '../../Controllers/LoadSaveWidgetController';
 import { useNotification } from '../../Providers/NotificationProvider';
 import '../../styles/LoadSaveWidget.css'
 import RoundedButton from '../Buttons/RoundedButton'
+import IconButton from '../Buttons/IconButton'
 import SavePill from '../SavePill';
 import { useConfirmation } from '../../Providers/ConfirmationProvider';
 import type { AppEdge, AppNode } from '../../types';
@@ -52,14 +54,16 @@ export default function LoadWidget(
 
             <div className="loadSaveWidgetButtonWrapper">
 
-                <RoundedButton
+                <IconButton
                     onClickHandler={() => stateLoadSaveWidgetController.handleCancelClick()}
-                    buttonText='Cancel'
+                    icon={X}
+                    label='Cancel'
                 />
 
-                <RoundedButton
+                <IconButton
                     onClickHandler={() => stateLoadSaveWidgetController.handleDeleteClick(stateSelectedSave)}
-                    buttonText='Delete'
+                    icon={Trash2}
+                    label='Delete selected save'
                 />
 
                 <RoundedButton
