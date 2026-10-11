@@ -15,10 +15,6 @@ export interface TrafficPropagationResult{
 // (already resolved by CanvasController.onConnect, independent of edge
 // drawing direction - a "pull" edge's caller is the thing doing the pulling)
 // gives us "who calls whom" directly, so traffic flows caller -> receiver.
-//
-// Every node with zero incoming edges (including a node with no edges at all)
-// is an "entry point" and independently receives the full entryRps - see the
-// comment below for why that's not divided among them.
 export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: number): TrafficPropagationResult{
 
     const warnings: string[] = [];
@@ -48,11 +44,28 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
     }
 
-    const entryNodeIds = nodeIds.filter((id) => (incomingEdgeCount.get(id) ?? 0) === 0);
+    const hasIncoming = (id: string): boolean => (incomingEdgeCount.get(id) ?? 0) > 0;
+    const hasOutgoing = (id: string): boolean => (outgoingEdgesByCaller.get(id)?.length ?? 0) > 0;
 
-    if(entryNodeIds.length === 0 && nodeIds.length > 0){
-        warnings.push("No entry point found - every node has an incoming connection, so traffic can't be resolved. Add a node with no incoming edges (or remove a cycle).");
-        nodeIds.forEach((id) => workloadRps.set(id, 0));
+    // A node only originates traffic if it's actually wired into the rest of
+    // the diagram as a front door: no incoming edges (nothing upstream of it
+    // in the diagram), AND at least one outgoing edge (it visibly forwards
+    // traffic onward to something). A node with no edges at all isn't part of
+    // any request flow - it gets zero simulated traffic. Its cost, if any,
+    // comes only from traffic-independent components (EC2 compute hours, S3
+    // storage) - that's a deliberate, correct distinction, not a gap: an idle
+    // EC2 instance still costs money sitting there, but an un-invoked Lambda
+    // genuinely costs $0, since Lambda bills per request.
+    const entryNodeIds = nodeIds.filter((id) => !hasIncoming(id) && hasOutgoing(id));
+    const isolatedNodeIds = nodeIds.filter((id) => !hasIncoming(id) && !hasOutgoing(id));
+
+    isolatedNodeIds.forEach((id) => workloadRps.set(id, 0));
+
+    const nodesNeedingResolution = nodeIds.length - isolatedNodeIds.length;
+
+    if(entryNodeIds.length === 0 && nodesNeedingResolution > 0){
+        warnings.push("No traffic entry point found - every remaining node is downstream of something else with no wired front door, so traffic can't be resolved. Add an edge from a node with no incoming connections (or remove a cycle).");
+        nodeIds.forEach((id) => { if(!isolatedNodeIds.includes(id)){ workloadRps.set(id, 0); } });
         return { workloadRps, warnings };
     }
 
@@ -72,7 +85,8 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
     }
 
     // Kahn's algorithm: process nodes once every incoming edge's caller rate
-    // is known, accumulating fan-in along the way.
+    // is known, accumulating fan-in along the way. Isolated nodes are already
+    // resolved above, so they're seeded as "processed" here and skipped.
     const remainingInDegree = new Map(incomingEdgeCount);
     const accumulatedIncomingRate = new Map<string, number>();
     nodeIds.forEach((id) => accumulatedIncomingRate.set(id, 0));
@@ -80,7 +94,7 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
     entryNodeIds.forEach((id) => accumulatedIncomingRate.set(id, entryRps));
 
     const queue: string[] = [...entryNodeIds];
-    const processed = new Set<string>();
+    const processed = new Set<string>(isolatedNodeIds);
 
     while(queue.length > 0){
 

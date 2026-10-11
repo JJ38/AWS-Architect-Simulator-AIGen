@@ -25,8 +25,15 @@ aggressively without touching the original.
 - `npm run build` — type-check (`tsc -b`) and production build
 - `npm run lint` — ESLint (`eslint.config.js`)
 - `npm run preview` — preview the production build
-
-No test runner is configured yet.
+- `npm run test` — Vitest, currently covering `src/Simulation/trafficPropagation.ts`
+  only. Added after that function shipped two real bugs in a row (traffic
+  getting divided across unrelated entry points, then an unconnected node
+  being treated as a traffic source) that manual Playwright spot-checks
+  weren't catching reliably — it's a pure function with no React/DOM
+  dependency, cheap to test thoroughly. When touching propagation/capacity
+  logic, add a test for the scenario rather than only checking it by hand in
+  the browser; when something in that area turns out wrong again, write the
+  regression test *before* fixing it.
 
 Type-checking and linting are two separate tools that both surface as editor
 diagnostics: `tsconfig.app.json` (`noUnusedLocals`/`noUnusedParameters` are on)

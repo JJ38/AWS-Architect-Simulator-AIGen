@@ -107,6 +107,33 @@ either repositioning the panel or making it collapsible.
       pair, noted their per-node costs, added a third *unconnected* S3 node,
       confirmed the API Gateway/Lambda costs were bit-for-bit identical
       afterward and the total only grew by exactly the new node's own cost
+- [x] **Second bug fix (same area, reported immediately after the first):
+      adding a totally unconnected node was still costing money, when no
+      traffic reaches it at all.** The first fix above was necessary but not
+      sufficient — "entry point" still just meant "zero incoming edges", so
+      a node with *no edges whatsoever* (not wired to anything, in or out)
+      still qualified and got the full traffic rate. Fixed: an entry point
+      now additionally requires at least one *outgoing* edge — proof it's
+      actually acting as a front door forwarding traffic onward, not just an
+      unconnected node sitting on the canvas. A fully isolated node gets
+      zero simulated traffic. This is a real, correct distinction, not a
+      gap: EC2 compute hours and S3 storage cost don't depend on traffic at
+      all, so an isolated EC2/S3 node still shows a nonzero cost (correctly
+      — an idle instance still costs money); an isolated Lambda, SQS,
+      DynamoDB-on-demand, or API Gateway node now correctly shows $0 (also
+      correctly — nothing bills you for a request that was never made).
+      Verified: a lone, fully-disconnected Lambda now shows $0.00 cost and
+      0.0 req/s in both the cost widget and the canvas's Capacity view
+- [x] **Added `src/Simulation/trafficPropagation.test.ts` (Vitest)** — two
+      real bugs in the same function in a row meant manual Playwright
+      spot-checks weren't sufficient. Covers: single/multiple independent
+      entry points (no rate-splitting), fan-in summing, fan-out not
+      splitting, isolated nodes getting zero traffic, an isolated node not
+      perturbing an existing connected architecture, terminal nodes (has
+      incoming, no outgoing — not treated as an entry point), cycle
+      detection, and the empty-diagram case. `npm run test` runs it. This is
+      the first test in the project — `propagateTraffic` was a natural place
+      to start since it's a pure function with no React/DOM dependency.
 - [x] Peak-vs-average aware per-node results: each node's simulation result
       carries both `averageWorkloadRps` and `peakWorkloadRps`/`peakLabel`
       (which day the peak fell on). Capacity-adequacy warnings (EC2 traffic
