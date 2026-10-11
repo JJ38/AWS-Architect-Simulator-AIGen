@@ -12,8 +12,7 @@ export default function Sidebar(
         setSelectedService,
         setShowLoadWidget,
         setShowSaveWidget,
-        setShowTerraformWidget,
-        setShowCostWidget
+        setShowTerraformWidget
     }
         :
     {
@@ -22,11 +21,10 @@ export default function Sidebar(
         setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>;
         setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>;
         setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>;
-        setShowCostWidget: React.Dispatch<React.SetStateAction<boolean>>;
     }
 ){
 
-    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget, setShowCostWidget));
+    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget));
 
 
     return  <div className="sidebar">
@@ -60,16 +58,7 @@ export default function Sidebar(
                     />
 
                     <SidebarButton
-                        serviceName={"Cost"}
-                        serviceDescription={"Cost & capacity simulation"}
-                        serviceImg={"cost_icon.svg"}
-                        key={"Cost"}
-                        isSelected={false}
-                        onClick={() => stateSidebarController.handleCostClick()}
-                    />
-
-                    <SidebarButton
-                        serviceName={"Load"} 
+                        serviceName={"Load"}
                         serviceDescription={"Load"} 
                         serviceImg={"load_icon.svg"} 
                         key={"Load"} 

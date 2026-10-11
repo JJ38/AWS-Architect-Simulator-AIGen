@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import type { AppEdge, AppNode, Service } from '../types.ts';
 import Sidebar from './Sidebar.tsx';
@@ -8,8 +8,12 @@ import NotificationProvider from '../Providers/NotificationProvider.tsx';
 import '../styles/Layout.css';
 import SaveWidget from './Widgets/SaveWidget.tsx';
 import TerraformWidget from './Widgets/TerraformWidget.tsx';
-import CostWidget from './Widgets/CostWidget.tsx';
+import TrafficPuck from './Widgets/TrafficPuck.tsx';
 import ConfirmationProvider from '../Providers/ConfirmationProvider.tsx';
+import type { CanvasView } from './ViewLayerSwitcher.tsx';
+import { runSimulation } from '../Simulation/simulate.ts';
+import { DEFAULT_PERIOD_DAYS, createSpikeProfile } from '../Simulation/trafficProfile.ts';
+import type { TrafficProfile } from '../Simulation/trafficProfile.ts';
 
 export default function Layout() {
 
@@ -20,8 +24,14 @@ export default function Layout() {
     const [stateShowLoadWidget, setShowLoadWidget] = useState<boolean>(false);
     const [stateShowSaveWidget, setShowSaveWidget] = useState<boolean>(false);
     const [stateShowTerraformWidget, setShowTerraformWidget] = useState<boolean>(false);
-    const [stateShowCostWidget, setShowCostWidget] = useState<boolean>(false);
     const [stateLoadedSaveName, setLoadedSaveName] = useState<string | null>(null);
+    const [stateTrafficProfile, setTrafficProfile] = useState<TrafficProfile>(() => createSpikeProfile(DEFAULT_PERIOD_DAYS, 8, 60, 23));
+    const [stateCanvasView, setCanvasView] = useState<CanvasView>('normal');
+
+    const simulationResult = useMemo(
+        () => runSimulation(stateNodes, stateEdges, stateTrafficProfile),
+        [stateNodes, stateEdges, stateTrafficProfile]
+    );
 
 
     return (
@@ -29,45 +39,43 @@ export default function Layout() {
             <ConfirmationProvider>
                 <div className="layout">
 
-                    <Sidebar 
-                        stateSelectedService={stateSelectedService} 
+                    <Sidebar
+                        stateSelectedService={stateSelectedService}
                         setSelectedService={setSelectedService}
                         setShowLoadWidget={setShowLoadWidget}
                         setShowSaveWidget={setShowSaveWidget}
                         setShowTerraformWidget={setShowTerraformWidget}
-                        setShowCostWidget={setShowCostWidget}
                     />
                     <ReactFlowProvider>
-                        <Canvas 
-                            stateSelectedService={stateSelectedService} 
+                        <Canvas
+                            stateSelectedService={stateSelectedService}
                             setSelectedService={setSelectedService}
                             stateNodes={stateNodes}
                             setNodes={setNodes}
                             stateEdges={stateEdges}
                             setEdges={setEdges}
+                            stateCanvasView={stateCanvasView}
+                            setCanvasView={setCanvasView}
+                            simulationResult={simulationResult}
                         />
                     </ReactFlowProvider>
 
-                    {
-                        stateShowTerraformWidget && 
+                    <TrafficPuck
+                        stateTrafficProfile={stateTrafficProfile}
+                        setTrafficProfile={setTrafficProfile}
+                        simulationResult={simulationResult}
+                    />
 
-                            <TerraformWidget 
+                    {
+                        stateShowTerraformWidget &&
+
+                            <TerraformWidget
                                 setShowTerraformWidget={setShowTerraformWidget}
                                 stateNodes={stateNodes}
                                 setNodes={setNodes}
                                 stateEdges={stateEdges}
                                 setEdges={setEdges}
                                 setDeploymentSettings={setDeploymentSettings}
-                            />
-                    }
-                    
-                    {
-                        stateShowCostWidget &&
-
-                            <CostWidget
-                                setShowCostWidget={setShowCostWidget}
-                                stateNodes={stateNodes}
-                                stateEdges={stateEdges}
                             />
                     }
 

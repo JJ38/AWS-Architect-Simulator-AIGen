@@ -99,12 +99,47 @@ either repositioning the panel or making it collapsible.
       from the per-day cost loop so a resource can be fine most of the period
       and only flagged for the one spike day, without spamming 31 near-duplicate
       warnings
-- [x] `CostWidget`/`CostWidgetController` — sidebar button, preset buttons,
-      editable traffic chart, run button, total cost over the period, per-node
-      table (avg/peak req/s, cost, warnings). Smoke-tested via Playwright:
-      placed+connected API Gateway V2 → Lambda, ran the default Holiday-spike
-      profile ($68.89/31 days), switched presets, and dragged a chart point
-      (confirmed the resulting avg/peak numbers moved correctly)
+- [x] ~~`CostWidget`/`CostWidgetController` modal~~ — replaced (see UI rework
+      below) by `TrafficPuck`, a persistent floating widget
+- [x] **UI rework** (per explicit feedback - the modal-with-a-"Run"-button
+      design didn't fit how this gets used): the simulation is now always
+      live. `Layout.tsx` derives `simulationResult` with `useMemo(() =>
+      runSimulation(...), [stateNodes, stateEdges, stateTrafficProfile])` —
+      no explicit "Run simulation" button anywhere anymore, it recomputes
+      whenever the diagram or traffic profile changes. Two new pieces:
+      - **`TrafficPuck`** (`src/Components/Widgets/TrafficPuck.tsx` +
+        `TrafficPuckController.ts`) — a persistent floating widget, not a
+        sidebar-toggled modal. Three states: collapsed (small pill, bottom-right,
+        sparkline + total cost — `TrafficSparkline.tsx` is a tiny non-interactive
+        presentational chart just for this), expanded (the full editable
+        `TrafficChart` + presets + a `<Show cost breakdown>` toggle that reveals
+        the per-node table), and docked-left/docked-right (a full-height sidebar
+        panel via flexbox `order` — `.reactFlowWrapper` got an explicit `order:2`
+        so the dock panel can slot in at `order:1` or `order:3` around it without
+        any DOM reordering — chart + table always visible together, no breakdown
+        toggle needed since there's room). Found and fixed a real overflow bug
+        here: the breakdown table (500px min-width) silently clipped inside the
+        380px docked panel until it got its own `overflow-x: auto` wrapper
+        (verified via `scrollWidth`/`clientWidth` in Playwright, not just visually)
+      - **`ViewLayerSwitcher`** (`src/Components/ViewLayerSwitcher.tsx`) — a
+        Google-Maps-style layer control, top-right of the canvas: Normal / Cost
+        / Capacity. Selecting a non-Normal view doesn't change how nodes look
+        (explicit feedback: no cost-based color heatmap for now — "expensive
+        compared to what?" is a real question without a defined baseline) - it
+        adds a small debug-style badge under each node (`ImageNode.tsx`'s
+        `imageNodeBadge`, fed via `canvasView`/`nodeMetric` merged into each
+        node's `data` in `Canvas.tsx`): `$X.XX` in Cost view, `X.X req/s` (+ ⚠
+        if the node has any warnings, capacity or otherwise) in Capacity view
+      - Removed the sidebar's "Cost" button/handler entirely — the puck is
+        always visible now, nothing to toggle
+      - Known gap: the color-heatmap idea for the Cost layer is parked, not
+        abandoned — needs a defined baseline (cheapest node on canvas? a fixed
+        $ scale?) before it's worth building
+      - Smoke-tested via Playwright end to end: placed+connected API Gateway V2
+        → Lambda, confirmed the collapsed puck shows a live total with no
+        button click, both canvas views render correct badges and Normal
+        clears them, breakdown/dock/undock all work, docked table scrolls
+        correctly after the overflow fix
 - [x] Simulation-only inputs standardized across services, not just S3. Rule
       (per explicit feedback): if it's a real Terraform argument, it belongs in
       `terraformProperties` (auto-rendered UI, included in Terraform
@@ -142,10 +177,10 @@ either repositioning the panel or making it collapsible.
 - [ ] Calendar-aware day labels ("Dec 24" instead of "Day 24") — the engine is
       deliberately period-agnostic (not December-specific), so labels are
       generic; real calendar dates would be a presentation-layer addition
-- [ ] The traffic profile resets to the default preset every time the Cost
-      widget is closed and reopened (its state is local to `CostWidget`, which
-      unmounts) — fine for now, but if that gets annoying, lift
-      `stateTrafficProfile` up to `Layout` like the other cross-widget state
+- [x] ~~Traffic profile resets when the widget closes~~ — moot now;
+      `stateTrafficProfile` lives in `Layout` (see UI rework above), not a
+      widget that unmounts, so it persists for the session regardless of the
+      puck's collapsed/expanded/docked state
 
 **dataviz-skill notes for `TrafficChart.tsx`** (read before touching chart
 code again): light-mode tokens, not dark — the widgets in this app are white

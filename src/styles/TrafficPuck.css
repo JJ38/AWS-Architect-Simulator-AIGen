@@ -1,0 +1,182 @@
+/* Collapsed puck - small floating pill, bottom-right of the canvas */
+.trafficPuckCollapsed{
+
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 20;
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+
+    background-color: white;
+    border: 1px solid black;
+    border-radius: 999px;
+    padding: 8px 16px 8px 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    cursor: pointer;
+
+}
+
+.trafficSparklineSvg{
+    width: 100px;
+    height: 28px;
+    display: block;
+}
+
+.trafficSparklineLine{
+    fill: none;
+    stroke: #2a78d6;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.trafficPuckCollapsedTotal{
+    font-weight: bold;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+/* Expanded (floating, not docked) */
+.trafficPuckExpanded{
+
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 20;
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    width: 560px;
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+
+    background-color: white;
+    border: 1px solid black;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+
+}
+
+/* Docked (full-height sidebar) */
+.trafficPuckDocked{
+
+    height: 100%;
+    width: 380px;
+    flex: 0 0 380px;
+
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    background-color: white;
+    padding: 16px;
+    overflow-y: auto;
+    box-sizing: border-box;
+
+}
+
+.trafficPuckDockedLeft{
+    order: 1;
+    border-right: 1px solid rgb(204, 203, 203);
+}
+
+.trafficPuckDockedRight{
+    order: 3;
+    border-left: 1px solid rgb(204, 203, 203);
+}
+
+/* Shared content styles (expanded + docked) */
+.trafficPuckHeader{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.trafficPuckTitle{
+    margin: 0px;
+}
+
+.trafficPuckHeaderButtons{
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.trafficPuckDisclaimer{
+    margin: 0px;
+    font-size: 0.8em;
+    color: #555;
+}
+
+.trafficPuckPresetRow{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.trafficPuckPresetLabel{
+    font-size: 0.85em;
+    color: #555;
+}
+
+.trafficPuckChartCaption{
+    margin: 0px;
+    font-size: 0.8em;
+    color: #555;
+}
+
+.trafficPuckTotal{
+    font-size: 1.1em;
+    font-weight: bold;
+    margin: 0px;
+}
+
+.trafficPuckBreakdown{
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid #ccc;
+    padding-top: 10px;
+}
+
+.trafficPuckWarnings{
+    margin: 0px;
+    padding-left: 20px;
+    color: #a15c00;
+    font-size: 0.85em;
+}
+
+.trafficPuckTableWrapper{
+    overflow-x: auto;
+}
+
+.trafficPuckTable{
+    border-collapse: collapse;
+    min-width: 500px;
+}
+
+.trafficPuckTable th, .trafficPuckTable td{
+    border: 1px solid #ccc;
+    padding: 6px 10px;
+    text-align: left;
+    font-size: 0.9em;
+}
+
+.trafficPuckRowWarning{
+    color: #a15c00;
+    font-size: 0.8em;
+}

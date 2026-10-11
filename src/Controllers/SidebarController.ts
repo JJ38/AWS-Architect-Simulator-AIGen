@@ -5,15 +5,13 @@ export class SidebarController{
     private setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>;
     private setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>;
     private setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>;
-    private setShowCostWidget: React.Dispatch<React.SetStateAction<boolean>>;
     private setSelectedService: React.Dispatch<React.SetStateAction<Service | null>>;
     private selectedService: Service | null;
 
-    public constructor(setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>, setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>, selectedService: Service | null, setSelectedService: React.Dispatch<React.SetStateAction<Service | null>>, setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>, setShowCostWidget: React.Dispatch<React.SetStateAction<boolean>>){
+    public constructor(setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>, setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>, selectedService: Service | null, setSelectedService: React.Dispatch<React.SetStateAction<Service | null>>, setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>){
         this.setShowLoadWidget = setShowLoadWidget;
         this.setShowSaveWidget = setShowSaveWidget;
         this.setShowTerraformWidget = setShowTerraformWidget;
-        this.setShowCostWidget = setShowCostWidget;
         this.setSelectedService = setSelectedService;
         this.selectedService = selectedService;
     }
@@ -37,12 +35,6 @@ export class SidebarController{
     public handleTerraformClick(){
 
         this.setShowTerraformWidget(true);
-
-    }
-
-    public handleCostClick(){
-
-        this.setShowCostWidget(true);
 
     }
 

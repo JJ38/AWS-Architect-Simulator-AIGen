@@ -50,15 +50,29 @@ directly in components:
   passes derived, specific props down. `zustand` is installed for when this
   outgrows prop-drilling, but isn't wired in yet.
 - **`Sidebar.tsx`** renders the service palette from `constants.ts`'s
-  `services` array plus action buttons (Save/Load/Terraform/Cost). Placement
+  `services` array plus action buttons (Save/Load/Terraform — no Cost button;
+  see `TrafficPuck` below, it's not a sidebar-toggled widget). Placement
   is click-to-select-then-click-to-place (click a sidebar button, then click
   the canvas pane) — not HTML5 drag-and-drop.
-- **`Canvas.tsx`** wraps `@xyflow/react`'s `<ReactFlow>`. Each `Controller`
-  class (`CanvasController`, `SidebarController`, `PropertiesWidgetController`,
-  `TerraformWidgetController`, `CostWidgetController`, ...) is instantiated
-  once per component via `useState(() => new XController(...))` and holds the
-  event-handling logic; components stay thin — they wire props to controller
-  methods and render.
+- **`Canvas.tsx`** wraps `@xyflow/react`'s `<ReactFlow>`, and also renders
+  `ViewLayerSwitcher` (Normal/Cost/Capacity, top-right — Google-Maps-style
+  layer control) and merges `canvasView`/`nodeMetric` into each node's `data`
+  so `ImageNode.tsx` can render a small debug-style badge under a node when a
+  non-Normal view is active, without changing how the node itself looks. Each
+  `Controller` class (`CanvasController`, `SidebarController`,
+  `PropertiesWidgetController`, `TerraformWidgetController`,
+  `TrafficPuckController`, ...) is instantiated once per component via
+  `useState(() => new XController(...))` and holds the event-handling logic;
+  components stay thin — they wire props to controller methods and render.
+- **`TrafficPuck.tsx`** is the cost/capacity UI — a persistent floating widget
+  (not a modal toggled from the sidebar), always rendered from `Layout.tsx`.
+  Three states: collapsed (small pill, bottom-right, sparkline + total),
+  expanded (full editable chart + presets + an optional breakdown table),
+  docked-left/docked-right (full-height sidebar panel, positioned via
+  flexbox `order` around `.reactFlowWrapper` rather than DOM reordering).
+  The simulation itself is always live — `Layout.tsx` derives it with
+  `useMemo(() => runSimulation(...), [stateNodes, stateEdges,
+  stateTrafficProfile])`, no "Run simulation" button anywhere.
 - **`src/Models/Resource.ts`** is the abstract base every AWS service extends
   (`src/Models/Services/*.ts`: EC2, S3, Lambda, APIGatewayV2, SQS, DynamoDB).
   Each subclass defines its own Terraform property shape in a static `create`,

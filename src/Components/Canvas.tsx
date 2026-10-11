@@ -5,7 +5,10 @@ import { CanvasController } from '../Controllers/CanvasController.ts';
 import '@xyflow/react/dist/style.css';
 import '../styles/Canvas.css';
 import PropertiesWidget from './Widgets/PropertiesWidget.tsx';
+import ViewLayerSwitcher from './ViewLayerSwitcher.tsx';
+import type { CanvasView } from './ViewLayerSwitcher.tsx';
 import { useNotification } from '../Providers/NotificationProvider.tsx';
+import type { SimulationResult } from '../Simulation/simulate.ts';
 
 export default function Canvas(
   {
@@ -14,7 +17,10 @@ export default function Canvas(
     stateNodes,
     setNodes,
     stateEdges,
-    setEdges
+    setEdges,
+    stateCanvasView,
+    setCanvasView,
+    simulationResult
   }
     :
   {
@@ -24,6 +30,9 @@ export default function Canvas(
     setNodes: React.Dispatch<React.SetStateAction<AppNode[]>>;
     stateEdges: AppEdge[];
     setEdges: React.Dispatch<React.SetStateAction<AppEdge[]>>;
+    stateCanvasView: CanvasView;
+    setCanvasView: React.Dispatch<React.SetStateAction<CanvasView>>;
+    simulationResult: SimulationResult;
   }
 ){
 
@@ -54,10 +63,25 @@ export default function Canvas(
   const onEdgesChange = useCallback((changes: any) => setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)), []);
   const onConnect = useCallback((params: any) => {stateCanvasController.onConnect(params, stateNodes)}, [stateNodes]);
 
-  const nodesWithSelection = stateNodes.map((node) => ({
-    ...node,
-    data: { ...node.data, isSelected: node.id === stateSelectedNodeID }
-  }));
+  const nodesWithOverlay = stateNodes.map((node) => {
+
+    const nodeResult = simulationResult.perNode.find((result) => result.nodeId === node.id);
+
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        isSelected: node.id === stateSelectedNodeID,
+        canvasView: stateCanvasView,
+        nodeMetric: nodeResult == null ? undefined : {
+          costUSD: nodeResult.costUSD,
+          peakWorkloadRps: nodeResult.peakWorkloadRps,
+          hasWarning: nodeResult.warnings.length > 0
+        }
+      }
+    };
+
+  });
 
   useEffect(() => {
     
@@ -87,7 +111,7 @@ export default function Canvas(
   return (
     <div className="reactFlowWrapper">
       <ReactFlow
-        nodes={[...nodesWithSelection, ...stateGhostNodes]}
+        nodes={[...nodesWithOverlay, ...stateGhostNodes]}
         edges={stateEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
@@ -104,7 +128,8 @@ export default function Canvas(
         colorMode='dark'//dark, light, system
         elementsSelectable={false}
       />
-      <PropertiesWidget 
+      <ViewLayerSwitcher canvasView={stateCanvasView} setCanvasView={setCanvasView} />
+      <PropertiesWidget
         stateSelectedNodeID={stateSelectedNodeID} 
         selectedNodeData={selectedNode?.data}
         stateNodes={stateNodes}
