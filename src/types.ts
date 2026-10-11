@@ -59,32 +59,32 @@ export interface Property<T>{
 export interface InputsController{
 
     keyboardInputOnChange(
-        event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, 
-        nodeProperty: Property<any>, 
+        event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>,
+        nodeProperty: Property<any>,
         propertyCategory: PropertyCategory,
         propertyRecordName: string[],
-        inputName: string, 
+        inputName: string,
         componentID: string | null,
-        componentSetter: React.Dispatch<React.SetStateAction<any>>
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null
     ): void,
     getDependantProperty(property: Property<any>, componentData: ComponentData | undefined): any,
     checkBoxOnChange(
-          event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, 
-        nodeProperty: Property<any>, 
+          event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>,
+        nodeProperty: Property<any>,
         propertyCategory: PropertyCategory,
         propertyRecordName: string[],
-        inputName: string, 
+        inputName: string,
         componentID: string | null,
-        componentSetter: React.Dispatch<React.SetStateAction<any>>
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null
     ): void,
     onSelectChange(
-        event: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>, 
-        nodeProperty: Property<any>, 
+        event: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>,
+        nodeProperty: Property<any>,
         propertyCategory: PropertyCategory,
         propertyRecordName: string[],
-        inputName: string, 
+        inputName: string,
         componentID: string | null,
-        componentSetter: React.Dispatch<React.SetStateAction<any>>
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null
     ): void,
     shouldShowProperty(property: Property<any>, componentData: ComponentData | undefined): boolean
 

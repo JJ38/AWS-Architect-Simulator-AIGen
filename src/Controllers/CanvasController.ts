@@ -2,7 +2,6 @@ import { type XYPosition, type Node, type ViewportHelperFunctions, type Edge, ad
 import type { AppEdge, AppNode, EdgeType, ResourceData, Service } from "../types";
 import { CanvasModel } from "../Models/CanvasModel.ts";
 import { resourceContainer, serviceImageSize } from "../constants.ts";
-import type Resource from "../Models/Resource.ts";
 import type { ResourceStatics } from "../Models/Resource.ts";
 
 
@@ -166,18 +165,14 @@ export class CanvasController{
 
         const defaultEdge = validEdgeType[0] ?? "";
 
-        let callerInstance: Resource;
-        let receiverInstance: Resource;
         let callerName: string;
         let receiverName: string;
         let callerID: string;
         let receiverID: string;
 
-        
+
         if(defaultEdge == "pull"){
 
-            callerInstance = new targetResource(targetNode.data);
-            receiverInstance = new sourceResource(sourceNode.data);
             callerName = targetServiceName;
             receiverName = sourceServiceName;
             callerID = targetNode.id;
@@ -185,8 +180,6 @@ export class CanvasController{
 
         }else{
 
-            callerInstance = new sourceResource(sourceNode.data);
-            receiverInstance = new targetResource(targetNode.data);
             callerName = sourceServiceName;
             receiverName = targetServiceName;
             callerID = sourceNode.id;

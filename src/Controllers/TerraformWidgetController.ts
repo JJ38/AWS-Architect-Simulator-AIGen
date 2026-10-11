@@ -61,17 +61,17 @@ export class TerraformWidgetController implements InputsController{
         this.setDeploymentSettings = setDeploymentSettings;
     }   
 
-    public keyboardInputOnChange(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, nodeProperty: Property<any>, propertyCategory: PropertyCategory, propertyRecordName: string[], inputName: string, componentID: string | null, componentSetter: React.Dispatch<React.SetStateAction<any>>): void {
-      
-    }
-    public getDependantProperty(property: Property<any>, componentData: ComponentData | undefined): any{
-       
-    }
-    public checkBoxOnChange(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, nodeProperty: Property<any>, propertyCategory: PropertyCategory, propertyRecordName: string[], inputName: string, componentID: string | null, componentSetter: React.Dispatch<React.SetStateAction<any>>): void {
+    public keyboardInputOnChange(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, nodeProperty: Property<any>, propertyCategory: PropertyCategory, propertyRecordName: string[], inputName: string, componentID: string | null, componentSetter: React.Dispatch<React.SetStateAction<any>> | null): void {
 
     }
-    public onSelectChange(event: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>, nodeProperty: Property<any>, propertyCategory: PropertyCategory, propertyRecordName: string[], inputName: string, componentID: string | null, componentSetter: React.Dispatch<React.SetStateAction<any>>): void {
-        
+    public getDependantProperty(property: Property<any>, componentData: ComponentData | undefined): any{
+
+    }
+    public checkBoxOnChange(event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, nodeProperty: Property<any>, propertyCategory: PropertyCategory, propertyRecordName: string[], inputName: string, componentID: string | null, componentSetter: React.Dispatch<React.SetStateAction<any>> | null): void {
+
+    }
+    public onSelectChange(event: React.ChangeEvent<HTMLSelectElement, HTMLSelectElement>, nodeProperty: Property<any>, propertyCategory: PropertyCategory, propertyRecordName: string[], inputName: string, componentID: string | null, componentSetter: React.Dispatch<React.SetStateAction<any>> | null): void {
+
     }
     public shouldShowProperty(property: Property<any>, componentData: ComponentData | undefined): boolean {
         return true
@@ -98,10 +98,10 @@ export class TerraformWidgetController implements InputsController{
         
     }
 
-    public handleConvertToTerraform(stateNodes: AppNode[], stateEdges: AppEdge[]){
+    public handleConvertToTerraform(stateNodes: AppNode[]){
 
         //create resource of each node.
-        const terraformConverter = new TerraformConverter({stateNodes: stateNodes, stateEdges: stateEdges});
+        const terraformConverter = new TerraformConverter({stateNodes: stateNodes});
 
         const validDiagram = terraformConverter.validateDiagram();
 

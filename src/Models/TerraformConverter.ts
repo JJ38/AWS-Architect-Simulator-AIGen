@@ -1,4 +1,4 @@
-import type { AppEdge, AppNode, CodeChunk } from "../types";
+import type { AppNode } from "../types";
 import type { ResourceStatics } from "./Resource";
 import { resourceContainer } from "../constants";
 
@@ -6,15 +6,13 @@ import { resourceContainer } from "../constants";
 export class TerraformConverter{
 
     private stateNodes: AppNode[];
-    private stateEdges: AppEdge[];
     public providerTerraform: string = "";
     public resourceTerraform: string = "";
 
 
-    public constructor({ stateNodes, stateEdges }: { stateNodes: AppNode[], stateEdges: AppEdge[]}){
+    public constructor({ stateNodes }: { stateNodes: AppNode[] }){
         this.stateNodes = stateNodes;
-        this.stateEdges = stateEdges;
-    }    
+    }
 
     public validateDiagram(): boolean{
 

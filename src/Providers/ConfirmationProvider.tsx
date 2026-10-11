@@ -1,5 +1,4 @@
 import { createContext, useContext, useState } from "react";
-import { ConfirmationWidgetController } from "../Controllers/ConfirmationWidgetController";
 import ConfirmationWidget from "../Components/Widgets/ConfirmationWidget";
 
 const ConfirmationContext = createContext<(() => void) | null>(null);

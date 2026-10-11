@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { Edge, Node } from '@xyflow/react';
 import { useNotification } from '../../Providers/NotificationProvider';
 import { SaveWidgetController } from '../../Controllers/SaveWidgetController';
 import '../../styles/SaveWidget.css'
@@ -25,7 +24,7 @@ export default function SaveWidget({
 }){
 
     const showNotification = useNotification();
-    const [stateSelectedSave, setSelectedSave] = useState<string | null>(null);
+    const [stateSelectedSave] = useState<string | null>(null);
     const [stateSaveWidgetController] = useState(() => new SaveWidgetController(setShowSaveWidget, showNotification));
     console.log(stateSelectedSave)
     return(

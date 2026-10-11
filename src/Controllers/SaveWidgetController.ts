@@ -1,4 +1,3 @@
-import type { Edge, Node } from "@xyflow/react";
 import type { AppEdge, AppNode } from "../types";
 
 export class SaveWidgetController{

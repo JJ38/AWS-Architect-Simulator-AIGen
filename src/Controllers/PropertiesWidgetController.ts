@@ -1,21 +1,9 @@
 import { resourceContainer } from "../constants";
 import type { ResourceStatics } from "../Models/Resource";
 import type Resource from "../Models/Resource";
-import type { AppEdge, AppNode, Property, AppComponent, PropertyCategory, ResourceData, ComponentData, PropertyRecord, CodeChunk, InputsController } from "../types";
+import type { AppNode, Property, AppComponent, PropertyCategory, ResourceData, ComponentData, PropertyRecord, CodeChunk, InputsController } from "../types";
 
 export class PropertiesWidgetController implements InputsController {
-
-    private setNodes: React.Dispatch<React.SetStateAction<AppNode[]>>;
-    private setEdges: React.Dispatch<React.SetStateAction<AppEdge[]>>;
-
-    public constructor(
-        setNodes: React.Dispatch<React.SetStateAction<AppNode[]>>, 
-        setEdges: React.Dispatch<React.SetStateAction<AppEdge[]>>
-    ){
-        this.setEdges = setEdges;
-        this.setNodes = setNodes;
-    }
-
 
     public getEdgeTerraform(componentData: ComponentData | undefined, stateNodes: AppNode[]): CodeChunk[]{
         
@@ -206,15 +194,19 @@ export class PropertiesWidgetController implements InputsController {
 
     }
 
-    private updateComponentProperty(newNodeProperty: Property<any>, 
-        propertyCategory: PropertyCategory, 
-        propertyRecordPath: string[], 
-        componentID: string, 
-        inputName: string, 
-        componentSetter: React.Dispatch<React.SetStateAction<any>>)
+    private updateComponentProperty(newNodeProperty: Property<any>,
+        propertyCategory: PropertyCategory,
+        propertyRecordPath: string[],
+        componentID: string,
+        inputName: string,
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null)
     {
-        
-        //need a way to deal with nested inputs 
+
+        if(componentSetter == null){
+            return;
+        }
+
+        //need a way to deal with nested inputs
         componentSetter((components: AppComponent[]) => components.map((component: AppComponent) => {
 
             if(component.id !== componentID){
@@ -267,7 +259,7 @@ export class PropertiesWidgetController implements InputsController {
         propertyRecordName: string[],
         inputName: string, 
         componentID: string | null,
-        componentSetter: React.Dispatch<React.SetStateAction<any>>
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null
     ){
 
         if(!this.validProperty(nodeProperty, componentID)) return;
@@ -288,7 +280,7 @@ export class PropertiesWidgetController implements InputsController {
         propertyRecordName: string[],
         inputName: string, 
         componentID: string | null,
-        componentSetter: React.Dispatch<React.SetStateAction<any>>
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null
     ){  
 
         if(!this.validProperty(nodeProperty, componentID)) return;
@@ -308,7 +300,7 @@ export class PropertiesWidgetController implements InputsController {
         propertyRecordName: string[],
         inputName: string, 
         componentID: string | null,
-        componentSetter: React.Dispatch<React.SetStateAction<any>>
+        componentSetter: React.Dispatch<React.SetStateAction<any>> | null
     ){
         
         if(!this.validProperty(nodeProperty, componentID)) return;

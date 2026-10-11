@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { Service } from '../types.ts';
 import { SidebarController } from '../Controllers/SidebarController.ts';
-import { useNotification } from '../Providers/NotificationProvider.tsx';
 import { services } from '../constants.ts';
 import SidebarButton from './Buttons/ServiceButton.tsx';
 import '../styles/Sidebar.css';
@@ -25,8 +24,7 @@ export default function Sidebar(
     }
 ){
 
-    const showNotification = useNotification();
-    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget, showNotification));
+    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget));
 
 
     return  <div className="sidebar">

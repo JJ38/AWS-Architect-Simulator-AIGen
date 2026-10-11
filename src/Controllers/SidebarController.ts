@@ -7,15 +7,13 @@ export class SidebarController{
     private setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>;
     private setSelectedService: React.Dispatch<React.SetStateAction<Service | null>>;
     private selectedService: Service | null;
-    private showNotification: (success: boolean, message: string) => void;
 
-    public constructor(setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>, setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>, selectedService: Service | null, setSelectedService: React.Dispatch<React.SetStateAction<Service | null>>, setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>, showNotification: (success: boolean, message: string) => void){
+    public constructor(setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>, setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>, selectedService: Service | null, setSelectedService: React.Dispatch<React.SetStateAction<Service | null>>, setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>){
         this.setShowLoadWidget = setShowLoadWidget;
         this.setShowSaveWidget = setShowSaveWidget;
         this.setShowTerraformWidget = setShowTerraformWidget;
         this.setSelectedService = setSelectedService;
         this.selectedService = selectedService;
-        this.showNotification = showNotification;
     }
 
     public handleSaveButtonClick(): void{

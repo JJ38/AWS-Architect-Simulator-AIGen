@@ -1,11 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, useReactFlow, addEdge } from '@xyflow/react';
-import type { AppEdge, AppNode, CodeChunk, EdgeType, Service } from '../types.ts';
+import { ReactFlow, applyNodeChanges, applyEdgeChanges, useReactFlow } from '@xyflow/react';
+import type { AppEdge, AppNode, Service } from '../types.ts';
 import { CanvasController } from '../Controllers/CanvasController.ts';
 import '@xyflow/react/dist/style.css';
-import '../styles/Canvas.css'; 
+import '../styles/Canvas.css';
 import PropertiesWidget from './Widgets/PropertiesWidget.tsx';
-import type Resource from '../Models/Resource.ts';
 import { useNotification } from '../Providers/NotificationProvider.tsx';
 
 export default function Canvas(

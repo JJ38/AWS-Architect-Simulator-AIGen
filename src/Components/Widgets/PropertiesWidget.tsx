@@ -29,7 +29,7 @@ function PropertiesWidget(
     }
 ){
  
-    const [statePropertiesWidgetController] = useState(() => new PropertiesWidgetController(setNodes, setEdges));
+    const [statePropertiesWidgetController] = useState(() => new PropertiesWidgetController());
 
     const selectedComponentType: string | null = stateSelectedNodeID != undefined ? "Node" : stateSelectedEdgeID != null ? "Edge" : null
 

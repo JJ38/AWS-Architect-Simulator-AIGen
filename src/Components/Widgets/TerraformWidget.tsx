@@ -4,8 +4,6 @@ import { useNotification } from "../../Providers/NotificationProvider";
 import RoundedButton from "../Buttons/RoundedButton";
 import '../../styles/TerraformWidget.css';
 import type { AppEdge, AppNode, CodeChunk } from "../../types";
-import { resourceContainer } from "../../constants";
-import type { ResourceStatics } from "../../Models/Resource";
 import { InputsRenderer } from "../Helpers/InputsRenderer";
 
 
@@ -169,7 +167,7 @@ export default function TerraformWidget({
                         stateShowDownloadTerraformForm &&
 
                         <RoundedButton
-                            onClickHandler={() => stateTerraformWidgetController.handleConvertToTerraform(stateNodes, stateEdges)}
+                            onClickHandler={() => stateTerraformWidgetController.handleConvertToTerraform(stateNodes)}
                             buttonText='Convert to terraform'
                         />
                     }
