@@ -72,20 +72,42 @@ directly in components:
   `Property<T>` (`value`/`type`/`options`/`dependant`/`link`), `PropertyRecord`,
   and `ResourceData`/`EdgeData`. `InputsRenderer.tsx` + `*WidgetController`'s
   `InputsController` implementation turn any `Record<string, PropertyRecord>`
-  into editable form inputs generically — this is why new Terraform fields or
-  even new simulation-only fields (see S3's `estimated_storage_gb`) don't need
-  new JSX.
+  into editable form inputs generically — this is why new fields never need
+  new JSX, on either side of the rule below.
+  - **Where a new per-node input goes** (this has gone wrong before — a new
+    field added only to one service and not applied consistently elsewhere):
+    if it's a real Terraform argument, it belongs in `terraformProperties`
+    (shows up in the Terraform preview/export). If it's purely a
+    cost-estimation assumption with no Terraform equivalent — S3's
+    `estimated_storage_gb`/`read_traffic_percent`, DynamoDB's
+    `read_traffic_percent`, Lambda's `estimated_avg_duration_ms` — it goes in
+    `componentProperties.simulation` instead, which renders as a visually
+    separate section and is never included in Terraform output. When adding a
+    cost-relevant field to one service, check whether the other services'
+    `estimateCost` have the same kind of hidden assumption (a global constant
+    standing in for something that should vary per node) and fix them
+    together, not just the one you happened to be touching.
 - **`src/Simulation/`** is the cost/capacity engine — kept as plain,
   framework-free TS functions (graph + traffic in, metrics out), per the
   original design goal, so it stays easy to test independent of React.
   `pricing.ts` holds the static illustrative pricing table (us-east-1, free
-  tier ignored on purpose);`trafficPropagation.ts` propagates a single
-  steady-state requests/sec number through the diagram using each edge's
-  already-resolved `callerID`/`receiverID` (so pull vs. push direction is
-  handled automatically); `simulate.ts` orchestrates propagation +
-  `Resource.estimateCost()` per node into a total/per-node breakdown. See
-  `todo.md`'s Simulation section for the specific simplifying assumptions this
-  v1 makes.
+  tier ignored on purpose) and takes a `(workloadRps, durationSeconds)` pair
+  rather than assuming a month, so the same formulas work for a flat estimate
+  or a traffic-profile day. `trafficProfile.ts` models traffic as a
+  `TrafficProfile` — one `{label, rps}` point per day, not a single number —
+  with Flat/Ramp/Weekly-cycle/Holiday-spike generators.
+  `trafficPropagation.ts` propagates one rps value through the diagram using
+  each edge's already-resolved `callerID`/`receiverID` (so pull vs. push
+  direction is handled automatically); `simulate.ts` calls this once per
+  traffic-profile point (so once per day) and sums each node's
+  `Resource.estimateCost()` into a period total, tracking both average and
+  peak workload per node. Capacity-adequacy warnings (is this node big enough
+  for its *peak* traffic) are a separate optional
+  `Resource.checkCapacityWarnings(peakWorkloadRps)` hook, checked once after
+  the day loop rather than per-day, so a resource that's fine most of the
+  period and only overloaded on the peak day gets one clear warning instead of
+  near-duplicates. See `todo.md`'s Simulation section for the specific
+  simplifying assumptions this v1 makes.
 
 **CSS convention**: one `.css` file per component under `src/styles/`, imported
 directly in the matching `.tsx` file (e.g. `import '../styles/Sidebar.css'`).

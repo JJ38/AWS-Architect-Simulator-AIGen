@@ -64,8 +64,15 @@ export default class Lambda extends Resource{
                 },
                 "aws_iam_role": IamFactory.makeIamRole(this.iamRoleName, "lambda.amazonaws.com")
             },
-            componentProperties: {},
-            
+            componentProperties: {
+                // Not a real Terraform argument - Terraform's timeout is a max
+                // cutoff, not a typical duration, so it can't drive the cost
+                // estimate. This is a separate, user-editable assumption.
+                "simulation": {
+                    "estimated_avg_duration_ms": { value: LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000, type: "number" }
+                }
+            },
+
         }
 
         return resourceData;
@@ -108,13 +115,17 @@ export default class Lambda extends Resource{
             warnings.push(`No memory_size set - assuming the default ${LAMBDA_DEFAULT_MEMORY_MB}MB.`);
         }
 
+        const avgDurationMs: number = this.componentProperties?.simulation?.estimated_avg_duration_ms?.value ?? (LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000);
+
+        if(this.componentProperties?.simulation?.estimated_avg_duration_ms?.value == null){
+            warnings.push(`No estimated_avg_duration_ms set - assuming ${LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000}ms (Terraform's timeout is a max cutoff, not a typical duration, so it can't be used here).`);
+        }
+
         const requests = requestsOverDuration(workloadRps, durationSeconds);
         const requestCost = requests * LAMBDA_PRICE_PER_REQUEST_USD;
 
-        const gbSeconds = requests * (memoryMB / 1024) * LAMBDA_ASSUMED_AVG_DURATION_SECONDS;
+        const gbSeconds = requests * (memoryMB / 1024) * (avgDurationMs / 1000);
         const computeCost = gbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
-
-        warnings.push(`Assumes a flat ${LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000}ms average execution time - Terraform's timeout is a max cutoff, not a typical duration, so it isn't used here.`);
 
         return {
             costUSD: requestCost + computeCost,

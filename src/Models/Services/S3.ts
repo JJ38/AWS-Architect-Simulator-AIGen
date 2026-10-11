@@ -53,10 +53,13 @@ export default class S3 extends Resource{
                 }
             },
             componentProperties: {
-                // Not a real Terraform argument - bucket size is runtime data, not
-                // config - but the cost estimator needs some idea of stored volume.
+                // Not real Terraform arguments - runtime/traffic data, not config -
+                // but the cost estimator needs some idea of stored volume and
+                // read/write mix. Kept separate from terraformProperties so the
+                // Terraform preview/export never sees them.
                 "simulation": {
-                    "estimated_storage_gb": { value: 10, type: "number" }
+                    "estimated_storage_gb": { value: 10, type: "number" },
+                    "read_traffic_percent": { value: ASSUMED_READ_FRACTION * 100, type: "number" }
                 }
             }
         }
@@ -96,12 +99,19 @@ export default class S3 extends Resource{
 
         const storageCost = storageGB * S3_STORAGE_PER_GB_MONTH_USD * monthFractionOfDuration(durationSeconds);
 
+        const readPercent: number = this.componentProperties?.simulation?.read_traffic_percent?.value ?? (ASSUMED_READ_FRACTION * 100);
+
+        if(this.componentProperties?.simulation?.read_traffic_percent?.value == null){
+            warnings.push(`No read_traffic_percent set - assuming the default ${ASSUMED_READ_FRACTION * 100}/${ASSUMED_WRITE_FRACTION * 100} read/write split.`);
+        }
+
+        const readFraction = readPercent / 100;
+        const writeFraction = 1 - readFraction;
+
         const requests = requestsOverDuration(workloadRps, durationSeconds);
         const requestCost =
-            requests * ASSUMED_READ_FRACTION * S3_GET_PRICE_PER_REQUEST_USD +
-            requests * ASSUMED_WRITE_FRACTION * S3_PUT_PRICE_PER_REQUEST_USD;
-
-        warnings.push(`Assumes a ${ASSUMED_READ_FRACTION * 100}/${ASSUMED_WRITE_FRACTION * 100} read/write request split - the simulation only tracks one traffic number per node.`);
+            requests * readFraction * S3_GET_PRICE_PER_REQUEST_USD +
+            requests * writeFraction * S3_PUT_PRICE_PER_REQUEST_USD;
 
         return {
             costUSD: storageCost + requestCost,

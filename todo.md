@@ -105,6 +105,30 @@ either repositioning the panel or making it collapsible.
       placed+connected API Gateway V2 → Lambda, ran the default Holiday-spike
       profile ($68.89/31 days), switched presets, and dragged a chart point
       (confirmed the resulting avg/peak numbers moved correctly)
+- [x] Simulation-only inputs standardized across services, not just S3. Rule
+      (per explicit feedback): if it's a real Terraform argument, it belongs in
+      `terraformProperties` (auto-rendered UI, included in Terraform
+      export/preview); if it's purely a cost-estimation assumption with no
+      Terraform equivalent, it goes in a `componentProperties.simulation`
+      section (same `InputsRenderer` mechanism, but visually and structurally
+      separate — never reaches the Terraform preview). Audited all six
+      services against this rule and fixed two inconsistencies: S3 only had
+      `estimated_storage_gb`, not the read/write split it also silently
+      assumed; Lambda's average-execution-duration assumption
+      (`LAMBDA_ASSUMED_AVG_DURATION_SECONDS`) wasn't exposed at all. Now:
+      - S3: `estimated_storage_gb`, `read_traffic_percent`
+      - DynamoDB: `read_traffic_percent` (drives both the on-demand cost split
+        and the provisioned-capacity warning, via a shared
+        `getReadFraction()` helper so the two can't drift apart)
+      - Lambda: `estimated_avg_duration_ms`
+      - EC2/SQS/APIGatewayV2: no simulation-only inputs needed — their cost
+        formulas don't currently assume anything beyond real Terraform args
+        and the flat per-request price
+      All default to the same values the old hardcoded constants used, so
+      existing behavior doesn't change until a user edits them. Verified via
+      Playwright: edited Lambda's `estimated_avg_duration_ms` through the
+      properties panel (200ms → 5000ms) and confirmed the cost widget's number
+      moved accordingly ($5.51 → $150.80)
 - [ ] Bottleneck detection/highlighting *on the canvas* — capacity warnings
       still only show as text in the cost widget's per-node table, not as node
       coloring
@@ -118,6 +142,10 @@ either repositioning the panel or making it collapsible.
 - [ ] Calendar-aware day labels ("Dec 24" instead of "Day 24") — the engine is
       deliberately period-agnostic (not December-specific), so labels are
       generic; real calendar dates would be a presentation-layer addition
+- [ ] The traffic profile resets to the default preset every time the Cost
+      widget is closed and reopened (its state is local to `CostWidget`, which
+      unmounts) — fine for now, but if that gets annoying, lift
+      `stateTrafficProfile` up to `Layout` like the other cross-widget state
 
 **dataviz-skill notes for `TrafficChart.tsx`** (read before touching chart
 code again): light-mode tokens, not dark — the widgets in this app are white
