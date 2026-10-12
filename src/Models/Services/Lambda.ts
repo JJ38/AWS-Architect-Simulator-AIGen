@@ -135,6 +135,26 @@ export default class Lambda extends Resource{
 
     }
 
+    // Little's Law, inverted: reserved_concurrent_executions / average
+    // duration (seconds) gives the sustained requests/sec that reservation
+    // can actually serve - the same ceiling assessCapacity sizes against.
+    // null (no ceiling) when unreserved, since that draws from the shared
+    // account-wide pool rather than a per-function limit.
+    getCapacityCeilingRps(): number | null{
+
+        const reservedConcurrency: number | null = this.terraformProperties?.aws_lambda_function?.reserved_concurrent_executions?.value ?? null;
+
+        if(reservedConcurrency == null){
+            return null;
+        }
+
+        const avgDurationMs: number = this.componentProperties?.simulation?.estimated_avg_duration_ms?.value ?? (LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000);
+        const avgDurationSeconds = avgDurationMs / 1000;
+
+        return avgDurationSeconds > 0 ? reservedConcurrency / avgDurationSeconds : Infinity;
+
+    }
+
     // Unlike EC2's instance throughput (an illustrative estimate) or
     // DynamoDB's RCU/WCU (a real but separate limit), Lambda concurrency is
     // the actual mechanism AWS throttles on: exceeding
@@ -155,9 +175,8 @@ export default class Lambda extends Resource{
         }
 
         const avgDurationMs: number = this.componentProperties?.simulation?.estimated_avg_duration_ms?.value ?? (LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000);
-        const avgDurationSeconds = avgDurationMs / 1000;
 
-        const requiredConcurrency = (rps: number): number => rps * avgDurationSeconds;
+        const requiredConcurrency = (rps: number): number => rps * (avgDurationMs / 1000);
 
         const peak = dailyWorkload.reduce((max, day) => Math.max(max, day.rps), 0);
         const peakRequiredConcurrency = requiredConcurrency(peak);

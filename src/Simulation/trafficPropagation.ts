@@ -2,26 +2,52 @@ import type { AppEdge, AppNode, EdgeType } from "../types";
 
 export interface TrafficPropagationResult{
 
-    // steady-state requests/sec reaching each node, keyed by node id
+    // steady-state requests/sec OFFERED to each node, keyed by node id - the
+    // full incoming load, uncapped, which is what drives that node's own
+    // cost and capacity assessment (it needs to see the real demand to
+    // correctly flag itself as overloaded).
     workloadRps: Map<string, number>,
+    // how much of that offered load did NOT get forwarded downstream because
+    // this node is at/over its own capacity ceiling - 0 for nodes with no
+    // ceiling (auto-scaling) or with headroom. This is what makes an
+    // overloaded upstream service act as a resistor: everything after it in
+    // the graph only ever sees workloadRps minus this.
+    droppedRps: Map<string, number>,
+    // which nodes actually have at least one outgoing edge in the diagram -
+    // droppedRps is only meaningful to show a user as "downstream impact"
+    // when there's a real downstream node to point at; a terminal/leaf node
+    // (e.g. a DynamoDB table nothing reads further from) can still be over
+    // its own capacity without that being true.
+    hasDownstreamEdges: Set<string>,
     warnings: string[]
 
 }
 
 // Propagates a single steady-state "requests/sec entering the system" number
-// through the diagram. Treats every edge's caller as generating exactly as
-// much outgoing traffic as it itself receives (a 1:1 passthrough assumption -
-// no fan-out multipliers, batching, or caching yet). callerID/receiverID
+// through the diagram. Each node forwards as much outgoing traffic as it
+// itself receives (no fan-out multipliers, batching, or caching yet) - UNLESS
+// it's at/over its own capacity ceiling, in which case it forwards only up to
+// that ceiling and the rest is dropped (see droppedRps above and the ceiling
+// clip in the Kahn's-algorithm loop below). A capacity-constrained node is a
+// resistor on the traffic reaching everything downstream of it, not a
+// transparent passthrough - without this, a saturated upstream service's
+// throttling would never show up as reduced load (and therefore reduced
+// cost) on anything after it. callerID/receiverID
 // (already resolved by CanvasController.onConnect, independent of edge
 // drawing direction - a "pull" edge's caller is the thing doing the pulling)
 // gives "who calls whom", and traffic flows caller -> receiver for push
 // (sync/async) edges - but receiver -> caller for pull edges, since a pull
 // receiver (e.g. a queue) is the thing accumulating traffic, and the caller
 // (the puller) drains it rather than originating it. See the edge loop below.
-export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: number): TrafficPropagationResult{
+// capacityCeilingRps: each node's fixed throughput ceiling (requests/sec),
+// if it has one - the same number Resource.getCapacityCeilingRps() returns.
+// Absent/null for a node means no ceiling (auto-scaling), so it forwards
+// everything it's offered unchanged.
+export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: number, capacityCeilingRps: Map<string, number | null> = new Map()): TrafficPropagationResult{
 
     const warnings: string[] = [];
     const workloadRps = new Map<string, number>();
+    const droppedRps = new Map<string, number>();
 
     const nodeIds = nodes.map((node) => node.id);
 
@@ -67,6 +93,10 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
     const hasIncoming = (id: string): boolean => (incomingEdgeCount.get(id) ?? 0) > 0;
     const hasOutgoing = (id: string): boolean => (outgoingPropagationEdges.get(id)?.length ?? 0) > 0;
 
+    // Purely a function of the edge graph, not traffic resolution - valid on
+    // every return path below, including the early-exit ones.
+    const hasDownstreamEdges = new Set<string>(nodeIds.filter((id) => hasOutgoing(id)));
+
     // A node only originates traffic if it's actually wired into the rest of
     // the diagram as a front door: no incoming edges (nothing upstream of it
     // in the diagram), AND at least one outgoing edge (it visibly forwards
@@ -79,14 +109,15 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
     const entryNodeIds = nodeIds.filter((id) => !hasIncoming(id) && hasOutgoing(id));
     const isolatedNodeIds = nodeIds.filter((id) => !hasIncoming(id) && !hasOutgoing(id));
 
-    isolatedNodeIds.forEach((id) => workloadRps.set(id, 0));
+    isolatedNodeIds.forEach((id) => { workloadRps.set(id, 0); droppedRps.set(id, 0); });
 
     const nodesNeedingResolution = nodeIds.length - isolatedNodeIds.length;
 
     if(entryNodeIds.length === 0 && nodesNeedingResolution > 0){
         warnings.push("No traffic entry point found - every remaining node is downstream of something else with no wired front door, so traffic can't be resolved. Add an edge from a node with no incoming connections (or remove a cycle).");
         nodeIds.forEach((id) => { if(!isolatedNodeIds.includes(id)){ workloadRps.set(id, 0); } });
-        return { workloadRps, warnings };
+        nodeIds.forEach((id) => droppedRps.set(id, 0));
+        return { workloadRps, droppedRps, hasDownstreamEdges, warnings };
     }
 
     // Each entry node independently receives the full entryRps - NOT a shared
@@ -126,14 +157,24 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
         processed.add(nodeId);
 
+        // nodeRate is the full offered load - what this node is being asked
+        // to handle, and what its own cost/capacity assessment is based on
+        // (it must see the real demand to correctly flag itself as
+        // overloaded). ceiling, if this node has one, caps what actually
+        // gets forwarded past it: an overloaded node acts as a resistor on
+        // everything downstream, not a transparent passthrough.
         const nodeRate = accumulatedIncomingRate.get(nodeId) ?? 0;
         workloadRps.set(nodeId, nodeRate);
+
+        const ceiling = capacityCeilingRps.get(nodeId);
+        const effectiveOutgoingRate = ceiling != null ? Math.min(nodeRate, ceiling) : nodeRate;
+        droppedRps.set(nodeId, Math.max(0, nodeRate - effectiveOutgoingRate));
 
         const downstream = outgoingPropagationEdges.get(nodeId) ?? [];
 
         for(const downstreamID of downstream){
 
-            accumulatedIncomingRate.set(downstreamID, (accumulatedIncomingRate.get(downstreamID) ?? 0) + nodeRate);
+            accumulatedIncomingRate.set(downstreamID, (accumulatedIncomingRate.get(downstreamID) ?? 0) + effectiveOutgoingRate);
 
             const remaining = (remainingInDegree.get(downstreamID) ?? 0) - 1;
             remainingInDegree.set(downstreamID, remaining);
@@ -150,9 +191,9 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
     if(unresolved.length > 0){
         warnings.push(`${unresolved.length} node(s) are part of a connection cycle and couldn't be resolved - their traffic is shown as 0 req/s.`);
-        unresolved.forEach((id) => workloadRps.set(id, 0));
+        unresolved.forEach((id) => { workloadRps.set(id, 0); droppedRps.set(id, 0); });
     }
 
-    return { workloadRps, warnings };
+    return { workloadRps, droppedRps, hasDownstreamEdges, warnings };
 
 }

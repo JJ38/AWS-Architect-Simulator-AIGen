@@ -168,6 +168,12 @@ function RightsizingPanel({ simulationResult }: { simulationResult: SimulationRe
                                             Over capacity on: {formatDayRanges(node.capacity.exceededDayLabels)}
                                         </p>
                                     }
+                                    {
+                                        node.peakDroppedRps > 0 && node.hasDownstreamEdges &&
+                                        <p className="trafficPuckRightsizingCardImpact">
+                                            ~{node.peakDroppedRps.toFixed(1)} req/s at peak can't be forwarded downstream — every service after this one in the diagram sees reduced traffic (and cost) as a result.
+                                        </p>
+                                    }
                                 </li>
                             )
                         }

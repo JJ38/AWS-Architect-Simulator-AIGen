@@ -55,6 +55,20 @@ export default abstract class Resource{
         return { status: "not_applicable", message: "Scales automatically - no fixed capacity to size." };
     }
 
+    // The same fixed ceiling assessCapacity sizes against, as a single
+    // requests/sec number - null for anything that auto-scales (the default,
+    // true of every serverless/auto-scaling service). This is what traffic
+    // propagation clips against: a node downstream of a capacity-constrained
+    // one should only see what that node can actually forward, not the full
+    // offered load - an overloaded upstream service acts as a resistor on
+    // the traffic reaching everything after it, not a transparent passthrough.
+    // EC2 and DynamoDB-provisioned/Lambda-with-reservation override this with
+    // the exact same math their assessCapacity uses, so the two can never
+    // disagree about where the ceiling is.
+    getCapacityCeilingRps(): number | null{
+        return null;
+    }
+
 
     toTerraformPreview(propertyRecords: Record<string, PropertyRecord>[]): CodeChunk[]{
 

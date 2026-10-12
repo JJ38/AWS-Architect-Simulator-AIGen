@@ -135,6 +135,33 @@ export default class DyanmoDB extends Resource{
 
     }
 
+    // Provisioned capacity translated into a single rps ceiling: whichever of
+    // read/write is tighter, scaled back up by its share of the assumed
+    // request mix (a day is over capacity once EITHER its read or write
+    // requirement crosses its own capacity, so the binding constraint is
+    // whichever produces the lower rps bound). null (no ceiling) for
+    // on-demand, which scales automatically.
+    getCapacityCeilingRps(): number | null{
+
+        const billingMode: string = this.terraformProperties?.aws_dynamodb_table?.billing_mode?.value ?? "PAY_PER_REQUEST";
+
+        if(billingMode !== "PROVISIONED"){
+            return null;
+        }
+
+        const readCapacity: number = this.terraformProperties?.aws_dynamodb_table?.read_capacity?.value ?? 0;
+        const writeCapacity: number = this.terraformProperties?.aws_dynamodb_table?.write_capacity?.value ?? 0;
+
+        const { readFraction } = this.getReadFraction();
+        const writeFraction = 1 - readFraction;
+
+        const readBoundRps = readFraction > 0 ? readCapacity / readFraction : Infinity;
+        const writeBoundRps = writeFraction > 0 ? writeCapacity / writeFraction : Infinity;
+
+        return Math.min(readBoundRps, writeBoundRps);
+
+    }
+
     // On-demand scales automatically - nothing to rightsize. Provisioned
     // mode is the rightsizing case: find every day whose required RCU/WCU
     // (derived from that day's resolved traffic) exceeds what's configured,

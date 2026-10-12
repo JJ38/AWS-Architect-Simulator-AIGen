@@ -196,4 +196,97 @@ describe("propagateTraffic", () => {
 
     });
 
+    // A capacity-constrained node is a resistor on the traffic reaching
+    // everything downstream of it, not a transparent passthrough - this is
+    // the core of the fix: an overloaded upstream service (e.g. an
+    // undersized EC2 fleet) must reduce what a downstream service (e.g.
+    // DynamoDB) actually sees, not just flag itself as overloaded in
+    // isolation while passing the full load through unchanged.
+    describe("capacity ceiling clipping", () => {
+
+        it("clips the outgoing rate at a saturated node, so downstream only sees what it could actually forward", () => {
+
+            const nodes = [makeNode("a"), makeNode("b"), makeNode("c")];
+            const edges = [makeEdge("a", "b"), makeEdge("b", "c")];
+            const ceilings = new Map([["b", 30]]);
+
+            const { workloadRps, droppedRps } = propagateTraffic(nodes, edges, 50, ceilings);
+
+            // b itself is still assessed against the full offered load...
+            expect(workloadRps.get("b")).toBe(50);
+            // ...but only forwards what it can actually handle.
+            expect(workloadRps.get("c")).toBe(30);
+            expect(droppedRps.get("b")).toBe(20);
+            expect(droppedRps.get("a")).toBe(0);
+
+        });
+
+        it("forwards the full offered rate unchanged when a node has headroom", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b")];
+            const ceilings = new Map([["a", 1000]]);
+
+            const { workloadRps, droppedRps } = propagateTraffic(nodes, edges, 50, ceilings);
+
+            expect(workloadRps.get("b")).toBe(50);
+            expect(droppedRps.get("a")).toBe(0);
+
+        });
+
+        it("clips every downstream edge to the same forwarded rate on fan-out, not splitting it further", () => {
+
+            const nodes = [makeNode("a"), makeNode("b"), makeNode("c"), makeNode("d")];
+            const edges = [makeEdge("a", "b"), makeEdge("b", "c"), makeEdge("b", "d")];
+            const ceilings = new Map([["b", 20]]);
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 50, ceilings);
+
+            expect(workloadRps.get("c")).toBe(20);
+            expect(workloadRps.get("d")).toBe(20);
+
+        });
+
+        it("sums post-clip contributions from multiple capacity-constrained upstream nodes on fan-in", () => {
+
+            const nodes = [makeNode("a"), makeNode("x"), makeNode("b"), makeNode("c")];
+            const edges = [makeEdge("a", "c"), makeEdge("b", "c")];
+            const ceilings = new Map([["a", 10], ["b", 15]]);
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 50, ceilings);
+
+            expect(workloadRps.get("c")).toBe(25);
+
+        });
+
+        it("a node with no ceiling entry (auto-scaling) forwards its full offered rate", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b")];
+
+            const { workloadRps, droppedRps } = propagateTraffic(nodes, edges, 500, new Map());
+
+            expect(workloadRps.get("b")).toBe(500);
+            expect(droppedRps.get("a")).toBe(0);
+
+        });
+
+        // A terminal/leaf node (e.g. a DynamoDB table nothing reads further
+        // from) can be over its own capacity with nothing downstream to
+        // actually impact - hasDownstreamEdges is what lets the UI avoid
+        // claiming a downstream effect that doesn't exist.
+        it("reports hasDownstreamEdges correctly for a chain node vs. a terminal leaf", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b")];
+
+            const { hasDownstreamEdges } = propagateTraffic(nodes, edges, 50);
+
+            expect(hasDownstreamEdges.has("a")).toBe(true);
+            expect(hasDownstreamEdges.has("b")).toBe(false);
+
+        });
+
+    });
+
 });

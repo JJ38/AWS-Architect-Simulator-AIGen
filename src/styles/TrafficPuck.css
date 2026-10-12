@@ -287,6 +287,17 @@
     color: var(--text-muted);
 }
 
+/* The downstream-impact line - distinct from the recommendation (what to
+   change) and the day list (when it happens): this is what breaks
+   elsewhere in the diagram as a result, so it gets its own slightly
+   stronger treatment rather than blending into the muted day-list style. */
+.trafficPuckRightsizingCardImpact{
+    margin: 4px 0px 0px 0px;
+    font-size: 0.8em;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
 .trafficPuckCapacityBadge{
     display: inline-block;
     font-family: var(--font-mono);

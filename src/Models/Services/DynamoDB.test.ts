@@ -69,3 +69,26 @@ describe("DynamoDB.assessCapacity", () => {
     });
 
 });
+
+// getCapacityCeilingRps is what traffic propagation clips downstream nodes'
+// workload against - it must land on the same binding (read or write)
+// constraint assessCapacity sizes against.
+describe("DynamoDB.getCapacityCeilingRps", () => {
+
+    it("is null for on-demand - it scales automatically, nothing to clip against", () => {
+
+        const table = makeTable("PAY_PER_REQUEST", 0, 0);
+        expect(table.getCapacityCeilingRps()).toBeNull();
+
+    });
+
+    it("is the tighter of the read/write bounds, scaled back up by the assumed request mix", () => {
+
+        // 5 RCU / 0.8 = 6.25 req/s read-bound; 2 WCU / 0.2 = 10 req/s
+        // write-bound - read is tighter.
+        const table = makeTable("PROVISIONED", 5, 2);
+        expect(table.getCapacityCeilingRps()).toBeCloseTo(6.25);
+
+    });
+
+});

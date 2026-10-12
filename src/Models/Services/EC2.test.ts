@@ -92,3 +92,24 @@ describe("EC2.assessCapacity", () => {
     });
 
 });
+
+// getCapacityCeilingRps is what traffic propagation clips downstream nodes'
+// workload against - it must agree exactly with the fleet capacity
+// assessCapacity sizes against, since both derive from the same math.
+describe("EC2.getCapacityCeilingRps", () => {
+
+    it("matches the fleet capacity (per-instance rps x instance_count) assessCapacity sizes against", () => {
+
+        const ec2 = makeEC2("m5.xlarge", 3); // 400 req/s/instance
+        expect(ec2.getCapacityCeilingRps()).toBe(1200);
+
+    });
+
+    it("never returns null - EC2 always has a fixed fleet ceiling, even with an unrecognised instance_type", () => {
+
+        const ec2 = makeEC2("not-a-real-type", 1);
+        expect(ec2.getCapacityCeilingRps()).toBeGreaterThan(0);
+
+    });
+
+});

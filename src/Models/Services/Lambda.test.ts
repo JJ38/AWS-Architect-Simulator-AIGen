@@ -76,3 +76,24 @@ describe("Lambda.assessCapacity", () => {
     });
 
 });
+
+// getCapacityCeilingRps is what traffic propagation clips downstream nodes'
+// workload against - Little's Law inverted (concurrency / duration), the
+// same ceiling assessCapacity sizes against.
+describe("Lambda.getCapacityCeilingRps", () => {
+
+    it("is null when unreserved - draws from the shared account pool, no per-function ceiling to clip against", () => {
+
+        const lambda = makeLambda(null, 200);
+        expect(lambda.getCapacityCeilingRps()).toBeNull();
+
+    });
+
+    it("is reserved concurrency / average duration (seconds)", () => {
+
+        const lambda = makeLambda(10, 200); // 10 / 0.2s = 50 req/s
+        expect(lambda.getCapacityCeilingRps()).toBe(50);
+
+    });
+
+});

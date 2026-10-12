@@ -142,6 +142,19 @@ export default class EC2 extends Resource{
 
     }
 
+    // Fleet capacity = per-instance throughput x instance_count - the same
+    // ceiling assessCapacity sizes against and traffic propagation clips
+    // downstream traffic to.
+    getCapacityCeilingRps(): number{
+
+        const instanceType: string | null = this.terraformProperties?.aws_instance?.instance_type?.value ?? null;
+        const perInstanceMaxRps = (instanceType != null ? EC2_ESTIMATED_MAX_RPS[instanceType] : undefined) ?? EC2_DEFAULT_MAX_RPS;
+        const { instanceCount } = this.getInstanceCount();
+
+        return perInstanceMaxRps * instanceCount;
+
+    }
+
     // Rightsizing check: is the fleet (instance_type x instance_count) big
     // enough for the traffic profile's shape, not just its peak? A resource
     // that's fine for 29 of 31 days and only falls over on the Dec 24 spike
@@ -153,7 +166,7 @@ export default class EC2 extends Resource{
         const instanceType: string | null = this.terraformProperties?.aws_instance?.instance_type?.value ?? null;
         const perInstanceMaxRps = (instanceType != null ? EC2_ESTIMATED_MAX_RPS[instanceType] : undefined) ?? EC2_DEFAULT_MAX_RPS;
         const { instanceCount } = this.getInstanceCount();
-        const fleetCapacityRps = perInstanceMaxRps * instanceCount;
+        const fleetCapacityRps = this.getCapacityCeilingRps();
 
         const peak = dailyWorkload.reduce((max, day) => Math.max(max, day.rps), 0);
         const peakUtilizationPercent = fleetCapacityRps > 0 ? (peak / fleetCapacityRps) * 100 : 0;
