@@ -459,6 +459,17 @@ today (a status + recommendation, not a modeled failure rate).
       throttle is thousands of req/s), not an oversight, but worth
       revisiting if this tool is ever used to simulate genuinely
       massive-scale traffic.
+- [x] **UI polish pass**: the collapsed puck (the default, most-common
+      state) previously gave zero rightsizing signal - you had to expand it
+      to find out anything was wrong. Added a small `⚠ N`/`~ N` alert badge
+      to the collapsed pill (critical count takes priority over warning
+      count; nothing shown when everything's fine) so the sanity-check
+      signal is visible without interaction. Also replaced the rightsizing
+      cards' truncated day list ("Day 1, Day 2, Day 3, Day 4, Day 5, Day 6
+      +25 more") with collapsed consecutive ranges ("Day 1–31") - the
+      DynamoDB "undersized literally every day" finding reads immediately
+      now instead of requiring the reader to infer it from a truncation
+      count.
 
 ## Track 1 — App: Visual design ("Blueprint" theme + light/dark)
 

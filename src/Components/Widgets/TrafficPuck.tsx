@@ -19,6 +19,62 @@ import {
 } from "../../Simulation/trafficProfile";
 import type { TrafficProfile } from "../../Simulation/trafficProfile";
 
+const MAX_DAY_RANGES_SHOWN = 8;
+
+// Collapses consecutive "Day N" labels into ranges ("Day 21-27" instead of
+// "Day 21, Day 22, ..., Day 27") - matters most for a resource that's
+// undersized for the whole period, where listing every day individually
+// buries the one-line point ("every day") in noise. Falls back to a plain,
+// capped list for labels that aren't "<prefix><number>" shaped.
+function formatDayRanges(labels: string[]): string{
+
+    if(labels.length === 0){
+        return "";
+    }
+
+    const parsed = labels.map((label) => {
+        const match = label.match(/^(.*?)(\d+)$/);
+        return match ? { prefix: match[1], num: parseInt(match[2], 10) } : null;
+    });
+
+    const prefix = parsed[0]?.prefix;
+    const allConsistentlyNumbered = parsed.every((entry) => entry != null && entry.prefix === prefix);
+
+    if(!allConsistentlyNumbered){
+        return labels.slice(0, 6).join(", ") + (labels.length > 6 ? ` +${labels.length - 6} more` : "");
+    }
+
+    const sortedNumbers = parsed.map((entry) => entry!.num).sort((a, b) => a - b);
+    const ranges: string[] = [];
+    let rangeStart = sortedNumbers[0];
+    let rangeEnd = sortedNumbers[0];
+
+    for(let i = 1; i <= sortedNumbers.length; i++){
+
+        const current = sortedNumbers[i];
+
+        if(current === rangeEnd + 1){
+            rangeEnd = current;
+            continue;
+        }
+
+        ranges.push(rangeStart === rangeEnd ? `${prefix}${rangeStart}` : `${prefix}${rangeStart}–${rangeEnd}`);
+
+        if(current != null){
+            rangeStart = current;
+            rangeEnd = current;
+        }
+
+    }
+
+    if(ranges.length > MAX_DAY_RANGES_SHOWN){
+        return ranges.slice(0, MAX_DAY_RANGES_SHOWN).join(", ") + ` +${ranges.length - MAX_DAY_RANGES_SHOWN} more`;
+    }
+
+    return ranges.join(", ");
+
+}
+
 const PRESETS: { label: string; build: () => TrafficProfile }[] = [
     { label: "Flat", build: () => createFlatProfile(DEFAULT_PERIOD_DAYS, 10) },
     { label: "Ramp up", build: () => createRampProfile(DEFAULT_PERIOD_DAYS, 5, 40) },
@@ -97,8 +153,7 @@ function RightsizingPanel({ simulationResult }: { simulationResult: SimulationRe
                                     {
                                         node.capacity.exceededDayLabels && node.capacity.exceededDayLabels.length > 0 &&
                                         <p className="trafficPuckRightsizingCardDays">
-                                            Over capacity on: {node.capacity.exceededDayLabels.slice(0, 6).join(", ")}
-                                            {node.capacity.exceededDayLabels.length > 6 ? ` +${node.capacity.exceededDayLabels.length - 6} more` : ""}
+                                            Over capacity on: {formatDayRanges(node.capacity.exceededDayLabels)}
                                         </p>
                                     }
                                 </li>
@@ -201,10 +256,25 @@ export default function TrafficPuck(
     const average = averageRps(stateTrafficProfile);
     const peak = peakPoint(stateTrafficProfile);
 
+    const criticalCount = simulationResult.perNode.filter((node) => node.capacity.status === "critical").length;
+    const warningCount = simulationResult.perNode.filter((node) => node.capacity.status === "warning").length;
+
     if(stateMode === "collapsed"){
 
         return (
             <div className="trafficPuckCollapsed" onClick={() => statePuckController.handleExpandClick()}>
+                {
+                    criticalCount > 0 &&
+                    <span className="trafficPuckCollapsedAlert trafficPuckCollapsedAlert-critical" title={`${criticalCount} resource${criticalCount === 1 ? "" : "s"} over capacity`}>
+                        ⚠ {criticalCount}
+                    </span>
+                }
+                {
+                    criticalCount === 0 && warningCount > 0 &&
+                    <span className="trafficPuckCollapsedAlert trafficPuckCollapsedAlert-warning" title={`${warningCount} resource${warningCount === 1 ? "" : "s"} close to capacity`}>
+                        ~ {warningCount}
+                    </span>
+                }
                 <TrafficSparkline points={stateTrafficProfile.points} />
                 <span className="trafficPuckCollapsedTotal">${simulationResult.totalCostUSD.toFixed(0)} / {simulationResult.periodDays}d</span>
             </div>

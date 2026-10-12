@@ -25,6 +25,31 @@
     border-color: var(--accent);
 }
 
+/* A rightsizing issue is relevant even while the puck is collapsed - this is
+   the only signal visible without opening it, so it needs to be legible at
+   a glance, not just present. */
+.trafficPuckCollapsedAlert{
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-family: var(--font-mono);
+    font-size: 0.8em;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 999px;
+    cursor: help;
+}
+
+.trafficPuckCollapsedAlert-critical{
+    background-color: var(--danger-bg);
+    color: var(--danger);
+}
+
+.trafficPuckCollapsedAlert-warning{
+    background-color: var(--warning-bg);
+    color: var(--warning);
+}
+
 .trafficSparklineSvg{
     width: 100px;
     height: 28px;
