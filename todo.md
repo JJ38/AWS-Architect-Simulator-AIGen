@@ -136,6 +136,38 @@ either repositioning the panel or making it collapsible.
       detection, and the empty-diagram case. `npm run test` runs it. This is
       the first test in the project — `propagateTraffic` was a natural place
       to start since it's a pure function with no React/DOM dependency.
+- [x] **Third bug fix (reported via real usage): capacity-constrained nodes
+      had zero effect on downstream traffic.** `propagateTraffic` resolved
+      each node's workload by pure fan-in summation — an EC2 fleet sized for
+      20 req/s sitting in front of DynamoDB never reduced what DynamoDB
+      appeared to receive, even once offered traffic hit 300 req/s. The
+      rightsizing engine correctly flagged the EC2 node as overloaded, but
+      that assessment never fed back into propagation, so every node's own
+      capacity ceiling and the traffic the rest of the diagram saw were
+      completely decoupled — a saturated upstream service acted as a
+      transparent passthrough instead of a resistor. Fixed: every `Resource`
+      now exposes `getCapacityCeilingRps(): number | null` (the exact ceiling
+      math `assessCapacity` already used, extracted so the two can never
+      disagree — EC2 fleet throughput, DynamoDB provisioned RCU/WCU
+      translated to an rps bound via the assumed read/write split, Lambda
+      reserved concurrency via Little's Law; `null` for anything
+      auto-scaling). `propagateTraffic` now clips each node's *outgoing* rate
+      to `min(offered, ceiling)` before fanning it out to downstream edges —
+      the node itself is still assessed and costed against the full offered
+      load (so it's still correctly flagged as overloaded), only what
+      reaches everything after it is capped. Also added a
+      `peakDroppedRps`/`hasDownstreamEdges` pair so the rightsizing panel can
+      say *"~40 req/s at peak can't be forwarded downstream"* on a flagged
+      node — gated on actually having a downstream edge, so a terminal leaf
+      node (e.g. a DynamoDB table nothing reads further from) doesn't claim
+      an effect that doesn't exist. 14 new Vitest tests (41 total): clipping
+      on fan-out/fan-in, per-service `getCapacityCeilingRps` matching
+      `assessCapacity`'s own math, and an end-to-end `simulate.ts`
+      integration test for the exact EC2→DynamoDB scenario reported.
+      Verified end-to-end against the rightsizing test deployment:
+      catalog-table's peak req/s is now correctly capped at catalog-web's
+      ~20 req/s fleet ceiling instead of mirroring its full 60 req/s offered
+      peak.
 - [x] Peak-vs-average aware per-node results: each node's simulation result
       carries both `averageWorkloadRps` and `peakWorkloadRps`/`peakLabel`
       (which day the peak fell on). Capacity-adequacy warnings (EC2 traffic
@@ -449,7 +481,12 @@ today (a status + recommendation, not a modeled failure rate).
       (e.g. a saturation curve past 100% utilization, or queueing delay for
       SQS/pull consumers specifically) rather than a binary
       over-capacity-or-not per day. Would need a real design discussion
-      first, not a guess.
+      first, not a guess. Note: the *propagation* half of this gap — an
+      overloaded node silently having zero effect on downstream traffic — is
+      now fixed (see the capacity-ceiling-clipping entry above); what's still
+      missing is modeling what happens to the dropped requests themselves
+      (hard failure, retry, queueing delay) rather than just not forwarding
+      them.
 - [x] ~~EC2 pricing/capacity table coverage~~ — expanded both
       `EC2_HOURLY_USD` and `EC2_ESTIMATED_MAX_RPS` from 11 to 17 instance
       types in lockstep (added t3.2xlarge, m5.4xlarge, c5.2xlarge,
