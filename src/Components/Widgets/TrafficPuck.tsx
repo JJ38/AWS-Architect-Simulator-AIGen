@@ -75,11 +75,23 @@ function formatDayRanges(labels: string[]): string{
 
 }
 
-const PRESETS: { label: string; build: () => TrafficProfile }[] = [
-    { label: "Flat", build: () => createFlatProfile(DEFAULT_PERIOD_DAYS, 10) },
-    { label: "Ramp up", build: () => createRampProfile(DEFAULT_PERIOD_DAYS, 5, 40) },
-    { label: "Weekly cycle", build: () => createWeeklyCycleProfile(DEFAULT_PERIOD_DAYS, 10, 2.5) },
-    { label: "Holiday spike", build: () => createSpikeProfile(DEFAULT_PERIOD_DAYS, 8, 60, 23) },
+// build() takes the period length so the same shape can be regenerated at a
+// different length (see PERIOD_PRESETS) - e.g. re-applying "Holiday spike"
+// at 90 days instead of 31 without losing the spike shape.
+const PRESETS: { label: string; build: (days: number) => TrafficProfile }[] = [
+    { label: "Flat", build: (days) => createFlatProfile(days, 10) },
+    { label: "Ramp up", build: (days) => createRampProfile(days, 5, 40) },
+    { label: "Weekly cycle", build: (days) => createWeeklyCycleProfile(days, 10, 2.5) },
+    // Keep the peak at the same relative position (~74% through) regardless
+    // of period length, not fixed at day 23.
+    { label: "Holiday spike", build: (days) => createSpikeProfile(days, 8, 60, Math.round(days * (23 / DEFAULT_PERIOD_DAYS))) },
+];
+
+const PERIOD_PRESETS: { label: string; days: number }[] = [
+    { label: "1 week", days: 7 },
+    { label: "1 month", days: DEFAULT_PERIOD_DAYS },
+    { label: "3 months", days: 90 },
+    { label: "1 year", days: 365 },
 ];
 
 const CAPACITY_STATUS_ICON: Record<string, string> = {
@@ -244,6 +256,10 @@ export default function TrafficPuck(
     const [stateMode, setMode] = useState<TrafficPuckMode>("collapsed");
     const [statePuckController] = useState(() => new TrafficPuckController(setMode));
     const [stateShowBreakdown, setShowBreakdown] = useState<boolean>(false);
+    // Layout.tsx seeds stateTrafficProfile with createSpikeProfile matching
+    // the "Holiday spike" preset below - kept in sync by convention, not a
+    // shared constant, since Layout doesn't import PRESETS.
+    const [stateActivePresetLabel, setActivePresetLabel] = useState<string>("Holiday spike");
 
     function handlePointChange(index: number, newRps: number){
 
@@ -251,6 +267,16 @@ export default function TrafficPuck(
             points: profile.points.map((point, pointIndex) => pointIndex === index ? { ...point, rps: newRps } : point)
         }));
 
+    }
+
+    function handlePresetClick(preset: { label: string; build: (days: number) => TrafficProfile }){
+        setActivePresetLabel(preset.label);
+        setTrafficProfile(preset.build(stateTrafficProfile.points.length));
+    }
+
+    function handlePeriodClick(days: number){
+        const activePreset = PRESETS.find((preset) => preset.label === stateActivePresetLabel) ?? PRESETS[0];
+        setTrafficProfile(activePreset.build(days));
     }
 
     const average = averageRps(stateTrafficProfile);
@@ -314,12 +340,25 @@ export default function TrafficPuck(
             </p>
 
             <div className="trafficPuckPresetRow">
+                <span className="trafficPuckPresetLabel">Period:</span>
+                {
+                    PERIOD_PRESETS.map((period) =>
+                        <RoundedButton
+                            key={period.label}
+                            onClickHandler={() => handlePeriodClick(period.days)}
+                            buttonText={period.label}
+                        />
+                    )
+                }
+            </div>
+
+            <div className="trafficPuckPresetRow">
                 <span className="trafficPuckPresetLabel">Traffic shape:</span>
                 {
                     PRESETS.map((preset) =>
                         <RoundedButton
                             key={preset.label}
-                            onClickHandler={() => setTrafficProfile(preset.build())}
+                            onClickHandler={() => handlePresetClick(preset)}
                             buttonText={preset.label}
                         />
                     )

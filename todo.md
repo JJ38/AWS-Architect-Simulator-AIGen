@@ -210,16 +210,18 @@ either repositioning the panel or making it collapsible.
       Playwright: edited Lambda's `estimated_avg_duration_ms` through the
       properties panel (200ms → 5000ms) and confirmed the cost widget's number
       moved accordingly ($5.51 → $150.80)
-- [ ] Bottleneck detection/highlighting *on the canvas* — capacity warnings
-      still only show as text in the cost widget's per-node table, not as node
-      coloring
+- [x] ~~Bottleneck detection/highlighting on the canvas~~ — done, see the
+      Capacity sim / rightsizing section below (status-colored node badges
+      in the Capacity canvas view, not just table text)
 - [ ] Static design-issue linting independent of traffic (single AZ, no ASG,
       public S3, missing health checks, etc.)
 - [ ] Latency modeling — cost only so far, no latency estimates
 - [ ] Live AWS Pricing API integration (replace the static table)
-- [ ] Variable period length in the UI — `DEFAULT_PERIOD_DAYS` (31) is
-      currently fixed; the data model supports any length, just no control to
-      change it yet
+- [x] ~~Variable period length in the UI~~ — a "Period:" preset row (1 week /
+      1 month / 3 months / 1 year) sits above the traffic-shape presets in
+      the puck; switching period re-applies the *currently active* traffic
+      shape at the new day count (not a reset to flat), and the holiday
+      spike's peak day scales proportionally with period length
 - [ ] Calendar-aware day labels ("Dec 24" instead of "Day 24") — the engine is
       deliberately period-agnostic (not December-specific), so labels are
       generic; real calendar dates would be a presentation-layer addition
