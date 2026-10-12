@@ -450,10 +450,14 @@ today (a status + recommendation, not a modeled failure rate).
       SQS/pull consumers specifically) rather than a binary
       over-capacity-or-not per day. Would need a real design discussion
       first, not a guess.
-- [ ] EC2's `EC2_ESTIMATED_MAX_RPS` table only covers the instance types
-      already in `EC2_HOURLY_USD` (~11 types) - same unrecognised-type
-      fallback pattern as pricing, documented as illustrative not
-      benchmarked.
+- [x] ~~EC2 pricing/capacity table coverage~~ — expanded both
+      `EC2_HOURLY_USD` and `EC2_ESTIMATED_MAX_RPS` from 11 to 17 instance
+      types in lockstep (added t3.2xlarge, m5.4xlarge, c5.2xlarge,
+      c5.4xlarge, r5.large, r5.xlarge — `instance_type` is a free-text
+      field, not a closed dropdown, so a user typing any of these no longer
+      silently falls back to the default estimate). Still illustrative, not
+      benchmarked - r5 RPS mirrors the vCPU-matched m5 tier since this is a
+      CPU-bound-workload heuristic, not a memory one.
 - [ ] SQS, API Gateway, and S3 are all `not_applicable` (no modelled capacity
       ceiling) - a reasonable match for real AWS behavior at the traffic
       levels this tool is meant for (standard SQS queues and S3 prefix

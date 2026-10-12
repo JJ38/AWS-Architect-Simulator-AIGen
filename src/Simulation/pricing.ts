@@ -32,11 +32,17 @@ export const EC2_HOURLY_USD: Record<string, number> = {
     "t3.medium": 0.0416,
     "t3.large": 0.0832,
     "t3.xlarge": 0.1664,
+    "t3.2xlarge": 0.3328,
     "m5.large": 0.096,
     "m5.xlarge": 0.192,
     "m5.2xlarge": 0.384,
+    "m5.4xlarge": 0.768,
     "c5.large": 0.085,
     "c5.xlarge": 0.17,
+    "c5.2xlarge": 0.34,
+    "c5.4xlarge": 0.68,
+    "r5.large": 0.126,
+    "r5.xlarge": 0.252,
 };
 
 export const EC2_DEFAULT_HOURLY_USD = 0.05; // fallback for an unrecognised/unset instance_type
@@ -55,11 +61,20 @@ export const EC2_ESTIMATED_MAX_RPS: Record<string, number> = {
     "t3.medium": 80,
     "t3.large": 160,
     "t3.xlarge": 320,
+    "t3.2xlarge": 640,
     "m5.large": 200,
     "m5.xlarge": 400,
     "m5.2xlarge": 800,
+    "m5.4xlarge": 1600,
     "c5.large": 250,
     "c5.xlarge": 500,
+    "c5.2xlarge": 1000,
+    "c5.4xlarge": 2000,
+    // r5 (memory-optimized) has the same vCPU count per size as the matching
+    // m5 tier, just more RAM - for a CPU-bound "typical web/API" workload
+    // that's the dimension that matters here, so these mirror m5 1:1.
+    "r5.large": 200,
+    "r5.xlarge": 400,
 };
 
 export const EC2_DEFAULT_MAX_RPS = 20; // fallback for an unrecognised/unset instance_type - same tier as t3.micro
