@@ -51,6 +51,15 @@
   color: var(--accent);
 }
 
+/* Has a tooltip (full free-tier detail), unlike the plain cost badge above -
+   needs pointer events re-enabled the same way the capacity badges do. */
+.imageNodeBadge-cost-freeTier{
+  border-color: var(--success);
+  color: var(--success);
+  pointer-events: auto;
+  cursor: help;
+}
+
 /* Capacity badges carry a hover tooltip (the full rightsizing message +
    recommendation), so they need pointer events unlike the cost badge. */
 .imageNodeBadge-capacity-ok,

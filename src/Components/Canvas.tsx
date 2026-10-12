@@ -79,7 +79,8 @@ export default function Canvas(
         nodeMetric: nodeResult == null ? undefined : {
           costUSD: nodeResult.costUSD,
           peakWorkloadRps: nodeResult.peakWorkloadRps,
-          capacity: nodeResult.capacity
+          capacity: nodeResult.capacity,
+          freeTierSavingsUSD: nodeResult.freeTierSavingsUSD
         }
       }
     };

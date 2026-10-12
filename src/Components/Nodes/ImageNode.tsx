@@ -15,7 +15,24 @@ function formatBadge(data: any): { text: string, className: string, title?: stri
     }
 
     if(data.canvasView === 'cost'){
-        return { text: `$${data.nodeMetric.costUSD.toFixed(2)}`, className: 'imageNodeBadge-cost' };
+
+        const costUSD: number = data.nodeMetric.costUSD;
+        const savingsUSD: number = data.nodeMetric.freeTierSavingsUSD ?? 0;
+
+        if(savingsUSD <= 0){
+            return { text: `$${costUSD.toFixed(2)}`, className: 'imageNodeBadge-cost' };
+        }
+
+        const text = costUSD === 0
+            ? `$0.00 (free tier)`
+            : `$${costUSD.toFixed(2)} (-$${savingsUSD.toFixed(2)} free tier)`;
+
+        return {
+            text,
+            className: 'imageNodeBadge-cost imageNodeBadge-cost-freeTier',
+            title: `Saved $${savingsUSD.toFixed(2)} via AWS's always-free tier this period.`
+        };
+
     }
 
     if(data.canvasView === 'capacity'){
