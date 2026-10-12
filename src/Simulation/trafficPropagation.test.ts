@@ -6,14 +6,17 @@ function makeNode(id: string): AppNode{
     return { id, position: { x: 0, y: 0 }, data: {} } as unknown as AppNode;
 }
 
-function makeEdge(callerID: string, receiverID: string, edgeType?: EdgeType): AppEdge{
+function makeEdge(callerID: string, receiverID: string, edgeType?: EdgeType, callsPerRequest?: number): AppEdge{
     return {
         id: `${callerID}->${receiverID}`,
         source: callerID,
         target: receiverID,
         data: {
             resources: { callerID, receiverID },
-            componentProperties: edgeType == null ? undefined : { behaviour: { edgeType: { value: edgeType, type: "edgeType" } } }
+            componentProperties: edgeType == null && callsPerRequest == null ? undefined : {
+                behaviour: edgeType == null ? undefined : { edgeType: { value: edgeType, type: "edgeType" } },
+                simulation: callsPerRequest == null ? undefined : { calls_per_request: { value: callsPerRequest, type: "number" } }
+            }
         }
     } as unknown as AppEdge;
 }
@@ -284,6 +287,102 @@ describe("propagateTraffic", () => {
 
             expect(hasDownstreamEdges.has("a")).toBe(true);
             expect(hasDownstreamEdges.has("b")).toBe(false);
+
+        });
+
+    });
+
+    // calls_per_request lets a single node fan out differently down each of
+    // its outgoing edges - reported via real usage: a node with two paths
+    // that both reconverge at the same downstream node (e.g. EC2 writing
+    // directly to DynamoDB *and* via a queue+consumer relay) was summing
+    // both paths as if they were independent traffic, since every edge
+    // always carried the full node rate with no way to say "this is a split,
+    // not a duplicate".
+    describe("calls_per_request fan-out multiplier", () => {
+
+        it("defaults to 1 (today's unchanged behavior) when the edge doesn't set it", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b")];
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 50);
+
+            expect(workloadRps.get("b")).toBe(50);
+
+        });
+
+        it("multiplies traffic on a >1 edge - several calls to the same destination per request", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b", undefined, 3)];
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 50);
+
+            expect(workloadRps.get("b")).toBe(150);
+
+        });
+
+        it("splits traffic across several outgoing edges instead of duplicating it, when their fractions sum to 1", () => {
+
+            const nodes = [makeNode("a"), makeNode("b"), makeNode("c")];
+            const edges = [
+                makeEdge("a", "b", undefined, 0.6),
+                makeEdge("a", "c", undefined, 0.4),
+            ];
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 50);
+
+            expect(workloadRps.get("b")).toBe(30);
+            expect(workloadRps.get("c")).toBe(20);
+
+        });
+
+        // The exact scenario reported: two paths from the same source
+        // reconverge at a shared downstream node. Previously this always
+        // summed to double the source's output; now the user can express
+        // "this is one logical flow split two ways" (fractions summing to
+        // 1, no inflation at the reconvergence point) instead of being stuck
+        // with "two full-rate duplicates" as the only option.
+        it("a split that reconverges downstream does not inflate the reconvergence point's traffic", () => {
+
+            const nodes = [makeNode("ec2"), makeNode("queue"), makeNode("table")];
+            const edges = [
+                makeEdge("ec2", "table", undefined, 0.5),  // direct path, half the traffic
+                makeEdge("ec2", "queue", undefined, 0.5),  // relayed path, other half
+                makeEdge("queue", "table"),                // relay forwards unchanged (default 1)
+            ];
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 100);
+
+            // table receives 50 (direct) + 50 (via queue) = 100 - matching
+            // what ec2 actually produced in total, not 200.
+            expect(workloadRps.get("table")).toBe(100);
+
+        });
+
+        it("applies the multiplier on top of the node's capacity-clipped rate, not its raw offered load", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b", undefined, 3)];
+            const ceilings = new Map([["a", 20]]);
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 100, ceilings);
+
+            // a can only actually process 20 of the 100 offered - b sees
+            // 3 calls per *processed* request (3 x 20 = 60), not 3 x 100.
+            expect(workloadRps.get("b")).toBe(60);
+
+        });
+
+        it("falls back to 1 for an invalid (negative/non-numeric) calls_per_request rather than zeroing or negating traffic", () => {
+
+            const nodes = [makeNode("a"), makeNode("b")];
+            const edges = [makeEdge("a", "b", undefined, -5)];
+
+            const { workloadRps } = propagateTraffic(nodes, edges, 50);
+
+            expect(workloadRps.get("b")).toBe(50);
 
         });
 

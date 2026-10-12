@@ -168,6 +168,58 @@ either repositioning the panel or making it collapsible.
       catalog-table's peak req/s is now correctly capped at catalog-web's
       ~20 req/s fleet ceiling instead of mirroring its full 60 req/s offered
       peak.
+- [x] **Fourth bug fix (reported via real usage): fan-out had no way to
+      express a split, only duplication.** Every node forwarded its full
+      resolved rate down *every* outgoing edge unconditionally - correct for
+      "this node makes a full-rate call to each of several destinations"
+      (e.g. writing to both DynamoDB and S3 per request), but wrong for "this
+      node's traffic is divided across several destinations" (e.g. an API
+      Gateway route split, or two paths that reconverge at the same
+      downstream node - direct writes to a table plus a queue+consumer relay
+      into the *same* table - which summed to double the real traffic with
+      no way to say otherwise). Fixed: added `calls_per_request` to each
+      edge's `componentProperties.simulation` (same convention as node-level
+      simulation-only inputs, renders automatically through the existing
+      generic property panel - zero new UI code needed). Default `1`
+      preserves today's behavior exactly; `<1` splits a node's traffic
+      across several edges (fractions summing to ~1 means no inflation at a
+      reconvergence point); `>1` models several calls to the same
+      destination per request. Applied on top of the node's already-
+      capacity-clipped rate (see the third fix above), not its raw offered
+      load, so a node dropping requests under load doesn't also generate
+      phantom extra downstream calls for traffic it never served.
+      - **Also surfaced a real, independent, pre-existing bug while building
+        this**: `PropertiesWidgetController.keyboardInputOnChange` stored
+        `event.target.value` verbatim for every property, including
+        `type: "number"` ones - but a DOM input's `.value` is *always* a
+        string, even for `<input type="number">`. Every numeric property
+        edited through the UI (EC2 `instance_count`, Lambda
+        `estimated_avg_duration_ms`, DynamoDB `read_traffic_percent`, and
+        now `calls_per_request`) was silently being stored as a string.
+        This went unnoticed for years of use because JS's arithmetic
+        operators auto-coerce strings (`"3" * 20 === 60`), so existing
+        number fields "accidentally" kept working - until
+        `calls_per_request`'s parsing logic, which deliberately does a
+        strict `typeof === "number"` check (to safely reject negative/NaN
+        input rather than silently miscounting traffic), hit a string every
+        time and silently fell back to the default of 1, making the new
+        feature appear to do nothing when edited through the UI. Fixed at
+        the source: `keyboardInputOnChange` now coerces via `Number(...)`
+        for `type: "number"` properties (empty string → `null`, not `NaN`),
+        so every numeric field across the whole app is now genuinely
+        numeric after editing, not just correct-by-coincidence.
+      - 9 new Vitest tests (50 total): `calls_per_request` default/multiply/
+        split/reconvergence-no-inflation/interaction-with-capacity-clipping/
+        invalid-value-fallback in `trafficPropagation.test.ts`, plus 3 new
+        `PropertiesWidgetController.test.ts` tests for the number-coercion
+        fix itself (number stored as number, empty field stored as null not
+        NaN, string properties unaffected).
+      - Verified end-to-end in-browser: set `calls_per_request = 2` on the
+        rightsizing deployment's checkout-fn → order-queue edge (modelling
+        "2 messages enqueued per checkout") and confirmed both order-queue's
+        and fulfillment-fn's avg/peak req/s doubled correctly (15.9→31.8,
+        60→120), with Lambda's rightsizing recommendation recalculating
+        correctly off the new peak (48 = 120 req/s × 400ms).
 - [x] Peak-vs-average aware per-node results: each node's simulation result
       carries both `averageWorkloadRps` and `peakWorkloadRps`/`peakLabel`
       (which day the peak fell on). Capacity-adequacy warnings (EC2 traffic

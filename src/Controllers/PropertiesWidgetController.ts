@@ -274,19 +274,34 @@ export class PropertiesWidgetController implements InputsController {
 
     //make generic and pass in setter
     public keyboardInputOnChange(
-        event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>, 
-        nodeProperty: Property<any>, 
+        event: React.ChangeEvent<HTMLInputElement, HTMLInputElement>,
+        nodeProperty: Property<any>,
         propertyCategory: PropertyCategory,
         propertyRecordName: string[],
-        inputName: string, 
+        inputName: string,
         componentID: string | null,
         componentSetter: React.Dispatch<React.SetStateAction<any>> | null
-    ){  
+    ){
 
         if(!this.validProperty(nodeProperty, componentID)) return;
 
         const newNodeProperty = structuredClone(nodeProperty);
-        newNodeProperty.value = event.target.value;
+
+        // event.target.value is always a string, even for <input type="number">
+        // - storing it verbatim silently turns every numeric property into a
+        // string once a user edits it through the UI. Arithmetic on it often
+        // "works" anyway via JS's implicit coercion (e.g. "3" * 20 === 60),
+        // which is exactly what let this go unnoticed, but it breaks any
+        // consumer that does a strict typeof === "number" check (as
+        // traffic propagation's calls_per_request parsing does, deliberately,
+        // to safely reject invalid input) - a half-typed/cleared field
+        // becomes NaN, filtered out below rather than stored as NaN.
+        if(nodeProperty.type === "number"){
+            const parsed = event.target.value === "" ? null : Number(event.target.value);
+            newNodeProperty.value = parsed != null && Number.isFinite(parsed) ? parsed : null;
+        }else{
+            newNodeProperty.value = event.target.value;
+        }
 
         this.updateComponentProperty(newNodeProperty, propertyCategory, propertyRecordName, componentID!, inputName, componentSetter);
 

@@ -84,6 +84,9 @@ function makeEdge(
             componentProperties: {
                 behaviour: {
                     edgeType: { value: edgeType, type: "edgeType", options: validEdgeTypes }
+                },
+                simulation: {
+                    calls_per_request: { value: 1, type: "number" }
                 }
             },
             terraformProperties: {},

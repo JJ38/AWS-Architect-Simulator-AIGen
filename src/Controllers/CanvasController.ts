@@ -196,6 +196,17 @@ export class CanvasController{
             componentProperties:{
                 "behaviour": {
                     "edgeType": { value: defaultEdge, type: "edgeType", options: validEdgeType },
+                },
+                // Not a real Terraform argument - how many downstream calls
+                // this specific edge represents per request the source node
+                // processes. 1 = today's default (every request generates
+                // exactly one call down this edge). Set below 1 to split
+                // traffic across several outgoing edges (e.g. an API Gateway
+                // route, or a conditional call) instead of duplicating it;
+                // above 1 to model several calls to the same destination per
+                // request (e.g. multiple DynamoDB writes).
+                "simulation": {
+                    "calls_per_request": { value: 1, type: "number" }
                 }
             },
             resources:{

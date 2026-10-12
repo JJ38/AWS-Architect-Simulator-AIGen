@@ -24,15 +24,22 @@ export interface TrafficPropagationResult{
 }
 
 // Propagates a single steady-state "requests/sec entering the system" number
-// through the diagram. Each node forwards as much outgoing traffic as it
-// itself receives (no fan-out multipliers, batching, or caching yet) - UNLESS
-// it's at/over its own capacity ceiling, in which case it forwards only up to
-// that ceiling and the rest is dropped (see droppedRps above and the ceiling
-// clip in the Kahn's-algorithm loop below). A capacity-constrained node is a
-// resistor on the traffic reaching everything downstream of it, not a
-// transparent passthrough - without this, a saturated upstream service's
-// throttling would never show up as reduced load (and therefore reduced
-// cost) on anything after it. callerID/receiverID
+// through the diagram. By default each edge forwards exactly as much
+// outgoing traffic as its source node receives (callsPerRequest = 1) - but
+// that's a per-EDGE default, not a per-node constant: a single node can fan
+// out differently down each of its outgoing edges (e.g. 1 call to one
+// Lambda, 3 writes to a DynamoDB table, a 30/70 split across two other
+// Lambdas), since in reality "one request in" rarely means "exactly one
+// identical call out on every connection". A node is ALSO at/over its own
+// capacity ceiling forwards only up to that ceiling and the rest is dropped
+// (see droppedRps above and the ceiling clip in the Kahn's-algorithm loop
+// below) - the per-edge multiplier is then applied on top of that already-
+// clipped rate, so a node that's dropping requests under load doesn't also
+// generate phantom extra downstream calls for traffic it never actually
+// served. A capacity-constrained node is a resistor on the traffic reaching
+// everything downstream of it, not a transparent passthrough - without this,
+// a saturated upstream service's throttling would never show up as reduced
+// load (and therefore reduced cost) on anything after it. callerID/receiverID
 // (already resolved by CanvasController.onConnect, independent of edge
 // drawing direction - a "pull" edge's caller is the thing doing the pulling)
 // gives "who calls whom", and traffic flows caller -> receiver for push
@@ -53,7 +60,12 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
     // Built from callerID/receiverID (cost-attribution roles), but NOT the
     // same graph for every edge type - see the pull-edge handling below.
-    const outgoingPropagationEdges = new Map<string, string[]>();
+    // Each entry also carries that specific edge's callsPerRequest - the
+    // same node can fan out differently down different edges (e.g. 1 call to
+    // one Lambda, 3 writes to a DynamoDB table, a 30/70 split across two
+    // other Lambdas), so the multiplier has to travel with the edge, not the
+    // node.
+    const outgoingPropagationEdges = new Map<string, { targetId: string, callsPerRequest: number }[]>();
     const incomingEdgeCount = new Map<string, number>();
 
     nodeIds.forEach((id) => incomingEdgeCount.set(id, 0));
@@ -82,8 +94,22 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
         const propagationSource = edgeType === "pull" ? receiverID : callerID;
         const propagationTarget = edgeType === "pull" ? callerID : receiverID;
 
+        // How many calls down THIS edge per request the source node actually
+        // processes - 1 (today's default/unchanged behavior) unless the user
+        // has set otherwise. >1 models multiple calls per request to the
+        // same destination (e.g. several DynamoDB writes); <1 models a
+        // conditional/split edge (e.g. an API Gateway route, or "only
+        // flagged orders call the fraud-check Lambda") - several edges off
+        // one node whose fractions sum to ~1 split the node's traffic
+        // instead of duplicating it. Invalid/negative values fall back to 1
+        // rather than silently zeroing or negating traffic.
+        const rawCallsPerRequest = edge.data?.componentProperties?.simulation?.calls_per_request?.value;
+        const callsPerRequest = typeof rawCallsPerRequest === "number" && Number.isFinite(rawCallsPerRequest) && rawCallsPerRequest >= 0
+            ? rawCallsPerRequest
+            : 1;
+
         const existing = outgoingPropagationEdges.get(propagationSource) ?? [];
-        existing.push(propagationTarget);
+        existing.push({ targetId: propagationTarget, callsPerRequest });
         outgoingPropagationEdges.set(propagationSource, existing);
 
         incomingEdgeCount.set(propagationTarget, (incomingEdgeCount.get(propagationTarget) ?? 0) + 1);
@@ -172,15 +198,15 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
         const downstream = outgoingPropagationEdges.get(nodeId) ?? [];
 
-        for(const downstreamID of downstream){
+        for(const { targetId, callsPerRequest } of downstream){
 
-            accumulatedIncomingRate.set(downstreamID, (accumulatedIncomingRate.get(downstreamID) ?? 0) + effectiveOutgoingRate);
+            accumulatedIncomingRate.set(targetId, (accumulatedIncomingRate.get(targetId) ?? 0) + effectiveOutgoingRate * callsPerRequest);
 
-            const remaining = (remainingInDegree.get(downstreamID) ?? 0) - 1;
-            remainingInDegree.set(downstreamID, remaining);
+            const remaining = (remainingInDegree.get(targetId) ?? 0) - 1;
+            remainingInDegree.set(targetId, remaining);
 
             if(remaining <= 0){
-                queue.push(downstreamID);
+                queue.push(targetId);
             }
 
         }
