@@ -1,7 +1,7 @@
 import Resource from "../Resource";
-import type { CapacityAssessment, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CapacityAssessment, CostEstimate, EdgeType, FreeTierPool, NodeDailyWorkload, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
-import { LAMBDA_ASSUMED_AVG_DURATION_SECONDS, LAMBDA_DEFAULT_MEMORY_MB, LAMBDA_PRICE_PER_GB_SECOND_USD, LAMBDA_PRICE_PER_REQUEST_USD, requestsOverDuration } from "../../Simulation/pricing.ts";
+import { LAMBDA_ASSUMED_AVG_DURATION_SECONDS, LAMBDA_DEFAULT_MEMORY_MB, LAMBDA_FREE_GB_SECONDS_PER_MONTH, LAMBDA_FREE_REQUESTS_PER_MONTH, LAMBDA_PRICE_PER_GB_SECOND_USD, LAMBDA_PRICE_PER_REQUEST_USD, requestsOverDuration } from "../../Simulation/pricing.ts";
 
 
 export default class Lambda extends Resource{
@@ -106,7 +106,13 @@ export default class Lambda extends Resource{
 
     }
 
-    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
+    // "Always free" - 1M requests + 400,000 GB-seconds/month, not tied to an
+    // AWS account's first 12 months, so it's modeled - see pricing.ts.
+    getFreeTierAllowance(): FreeTierPool{
+        return { requests: LAMBDA_FREE_REQUESTS_PER_MONTH, compute: LAMBDA_FREE_GB_SECONDS_PER_MONTH };
+    }
+
+    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
 
         const warnings: string[] = [];
         const memoryMB: number = this.terraformProperties?.aws_lambda_function?.memory_size?.value ?? LAMBDA_DEFAULT_MEMORY_MB;
@@ -122,15 +128,28 @@ export default class Lambda extends Resource{
         }
 
         const requests = requestsOverDuration(workloadRps, durationSeconds);
-        const requestCost = requests * LAMBDA_PRICE_PER_REQUEST_USD;
-
         const gbSeconds = requests * (memoryMB / 1024) * (avgDurationMs / 1000);
-        const computeCost = gbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
+
+        const freeRequests = Math.min(requests, Math.max(0, freeTierRemaining.requests ?? 0));
+        const freeGbSeconds = Math.min(gbSeconds, Math.max(0, freeTierRemaining.compute ?? 0));
+
+        const billableRequests = requests - freeRequests;
+        const billableGbSeconds = gbSeconds - freeGbSeconds;
+
+        const requestCost = billableRequests * LAMBDA_PRICE_PER_REQUEST_USD;
+        const computeCost = billableGbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
+
+        const freeTierSavingsUSD = freeRequests * LAMBDA_PRICE_PER_REQUEST_USD + freeGbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
 
         return {
             costUSD: requestCost + computeCost,
             breakdown: { "requests": requestCost, "compute": computeCost },
-            warnings: warnings
+            warnings: warnings,
+            freeTierSavingsUSD,
+            freeTierRemainingAfter: {
+                requests: (freeTierRemaining.requests ?? 0) - freeRequests,
+                compute: (freeTierRemaining.compute ?? 0) - freeGbSeconds
+            }
         };
 
     }

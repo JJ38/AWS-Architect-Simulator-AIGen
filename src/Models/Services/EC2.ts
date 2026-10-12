@@ -1,5 +1,5 @@
 import Resource from "../Resource";
-import type { CapacityAssessment, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CapacityAssessment, CostEstimate, EdgeType, FreeTierPool, NodeDailyWorkload, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
 import { EC2_DEFAULT_HOURLY_USD, EC2_DEFAULT_MAX_RPS, EC2_ESTIMATED_MAX_RPS, EC2_HOURLY_USD, hoursInDuration } from "../../Simulation/pricing.ts";
 
@@ -110,7 +110,10 @@ export default class EC2 extends Resource{
     // EC2 bills per instance running, not per-request - cost scales with
     // durationSeconds and instance_count, regardless of workloadRps. See
     // assessCapacity for the traffic-vs-fleet-size check.
-    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
+    //
+    // No free tier modeled: EC2's 750 free t2/t3.micro hours/month only
+    // applies for an AWS account's first 12 months - see pricing.ts.
+    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
 
         const warnings: string[] = [];
 
@@ -137,7 +140,9 @@ export default class EC2 extends Resource{
         return {
             costUSD: computeCost,
             breakdown: { "compute": computeCost },
-            warnings: warnings
+            warnings: warnings,
+            freeTierSavingsUSD: 0,
+            freeTierRemainingAfter: freeTierRemaining
         };
 
     }

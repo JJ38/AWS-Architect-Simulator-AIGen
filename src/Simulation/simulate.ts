@@ -1,4 +1,4 @@
-import type { AppEdge, AppNode, CapacityAssessment, NodeDailyWorkload } from "../types";
+import type { AppEdge, AppNode, CapacityAssessment, FreeTierPool, NodeDailyWorkload } from "../types";
 import type { ResourceStatics } from "../Models/Resource";
 import { resourceContainer } from "../constants";
 import { propagateTraffic } from "./trafficPropagation";
@@ -27,13 +27,18 @@ export interface NodeSimulationResult{
     // peakDroppedRps only means "downstream impact" when there's an actual
     // downstream node; a terminal/leaf node can be over capacity with
     // nothing after it to affect.
-    hasDownstreamEdges: boolean
+    hasDownstreamEdges: boolean,
+    // total $ this node was discounted via free tier over the period - 0
+    // for services with no modeled free tier, or once the shared pool runs
+    // dry. See Resource.getFreeTierAllowance.
+    freeTierSavingsUSD: number
 
 }
 
 export interface SimulationResult{
 
     totalCostUSD: number,
+    totalFreeTierSavingsUSD: number,
     periodDays: number,
     perNode: NodeSimulationResult[],
     warnings: string[]
@@ -47,6 +52,7 @@ interface NodeAccumulator{
     peakLabel: string,
     peakDroppedRps: number,
     costUSD: number,
+    freeTierSavingsUSD: number,
     breakdown: Record<string, number>,
     dayWarnings: Set<string>,
     dailyWorkload: NodeDailyWorkload[]
@@ -79,6 +85,7 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
         peakLabel: trafficProfile.points[0]?.label ?? "",
         peakDroppedRps: 0,
         costUSD: 0,
+        freeTierSavingsUSD: 0,
         breakdown: {},
         dayWarnings: new Set<string>(),
         dailyWorkload: []
@@ -102,7 +109,18 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
     // - identical every iteration, so the last day's value is as good as any.
     let hasDownstreamEdges = new Set<string>();
 
-    for(const point of trafficProfile.points){
+    // Free tier: one pool PER SERVICE TYPE (not per node - mirrors AWS's
+    // actual account/region-wide, not per-resource, free tier), reset every
+    // getFreeTierResetDays() simulated days with no rollover of whatever
+    // went unused. Nodes of the same service type processed later the same
+    // day/period see whatever the earlier ones left in the pool - a minor,
+    // documented simplification (node-array order decides who gets first
+    // claim within a period) that's appropriate for a ballpark tool, not
+    // exact billing.
+    const freeTierPoolByService = new Map<string, FreeTierPool>();
+    const freeTierPeriodIndexByService = new Map<string, number>();
+
+    trafficProfile.points.forEach((point, dayIndex) => {
 
         const { workloadRps, droppedRps, hasDownstreamEdges: dayHasDownstreamEdges, warnings } = propagateTraffic(nodes, edges, point.rps, capacityCeilingRps);
         warnings.forEach((warning) => globalWarnings.add(warning));
@@ -114,14 +132,25 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
             const nodeWorkloadRps = workloadRps.get(node.id) ?? 0;
             const nodeDroppedRps = droppedRps.get(node.id) ?? 0;
 
-            const serviceName = node.data.service.name;
-            const resource: ResourceStatics = resourceContainer[serviceName!];
+            const serviceName = node.data.service.name!;
+            const resource: ResourceStatics = resourceContainer[serviceName];
             const resourceInstance = new resource(node.data);
 
-            const dayCost = resourceInstance.estimateCost(nodeWorkloadRps, SECONDS_PER_DAY);
+            const resetDays = resourceInstance.getFreeTierResetDays();
+            const periodIndex = Math.floor(dayIndex / resetDays);
+
+            if(freeTierPeriodIndexByService.get(serviceName) !== periodIndex){
+                freeTierPoolByService.set(serviceName, resourceInstance.getFreeTierAllowance());
+                freeTierPeriodIndexByService.set(serviceName, periodIndex);
+            }
+
+            const freeTierRemaining = freeTierPoolByService.get(serviceName) ?? {};
+            const dayCost = resourceInstance.estimateCost(nodeWorkloadRps, SECONDS_PER_DAY, freeTierRemaining);
+            freeTierPoolByService.set(serviceName, dayCost.freeTierRemainingAfter);
 
             accumulator.rpsSum += nodeWorkloadRps;
             accumulator.costUSD += dayCost.costUSD;
+            accumulator.freeTierSavingsUSD += dayCost.freeTierSavingsUSD;
             addToBreakdown(accumulator.breakdown, dayCost.breakdown);
             dayCost.warnings.forEach((warning) => accumulator.dayWarnings.add(warning));
             accumulator.dailyWorkload.push({ label: point.label, rps: nodeWorkloadRps });
@@ -134,7 +163,7 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
 
         }
 
-    }
+    });
 
     const periodDays = trafficProfile.points.length;
 
@@ -158,13 +187,15 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
             warnings: Array.from(accumulator.dayWarnings),
             capacity,
             peakDroppedRps: accumulator.peakDroppedRps,
-            hasDownstreamEdges: hasDownstreamEdges.has(node.id)
+            hasDownstreamEdges: hasDownstreamEdges.has(node.id),
+            freeTierSavingsUSD: accumulator.freeTierSavingsUSD
         };
 
     });
 
     const totalCostUSD = perNode.reduce((total, result) => total + result.costUSD, 0);
+    const totalFreeTierSavingsUSD = perNode.reduce((total, result) => total + result.freeTierSavingsUSD, 0);
 
-    return { totalCostUSD, periodDays, perNode, warnings: Array.from(globalWarnings) };
+    return { totalCostUSD, totalFreeTierSavingsUSD, periodDays, perNode, warnings: Array.from(globalWarnings) };
 
 }

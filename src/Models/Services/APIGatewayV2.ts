@@ -1,5 +1,5 @@
 import Resource from "../Resource";
-import type { CostEstimate, EdgeType, PermissionType, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CostEstimate, EdgeType, FreeTierPool, PermissionType, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { APIGATEWAYV2_PRICE_PER_MILLION_REQUESTS_USD, requestsOverDuration } from "../../Simulation/pricing.ts";
 
 
@@ -54,7 +54,9 @@ export default class APIGatewayV2 extends Resource{
         return null;
     }
 
-    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
+    // No free tier modeled: API Gateway's 1M calls/month free tier only
+    // applies for an AWS account's first 12 months - see pricing.ts.
+    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
 
         const requests = requestsOverDuration(workloadRps, durationSeconds);
         const requestCost = requests * APIGATEWAYV2_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
@@ -62,7 +64,9 @@ export default class APIGatewayV2 extends Resource{
         return {
             costUSD: requestCost,
             breakdown: { "requests": requestCost },
-            warnings: []
+            warnings: [],
+            freeTierSavingsUSD: 0,
+            freeTierRemainingAfter: freeTierRemaining
         };
 
     }

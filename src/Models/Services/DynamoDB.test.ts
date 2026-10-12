@@ -92,3 +92,55 @@ describe("DynamoDB.getCapacityCeilingRps", () => {
     });
 
 });
+
+describe("DynamoDB.estimateCost - free tier", () => {
+
+    it("charges full price for provisioned capacity when no free tier pool is passed", () => {
+
+        const table = makeTable("PROVISIONED", 50, 20);
+        const cost = table.estimateCost(100, 86400);
+
+        expect(cost.freeTierSavingsUSD).toBe(0);
+        expect(cost.costUSD).toBeGreaterThan(0);
+
+    });
+
+    it("discounts up to 25 RCU/WCU of provisioned capacity, billing only the excess", () => {
+
+        const table = makeTable("PROVISIONED", 50, 20); // 20 WCU is entirely under the 25 free
+        const cost = table.estimateCost(100, 86400, { rcu: 25, wcu: 25 });
+
+        // only 50 - 25 = 25 RCU billed; all 20 WCU free, 0 WCU billed
+        expect(cost.breakdown.write_capacity).toBe(0);
+        expect(cost.breakdown.read_capacity).toBeGreaterThan(0);
+        expect(cost.freeTierSavingsUSD).toBeGreaterThan(0);
+        expect(cost.freeTierRemainingAfter).toEqual({ rcu: 0, wcu: 5 });
+
+    });
+
+    it("on-demand tables don't touch the rcu/wcu pool at all - it passes through unchanged", () => {
+
+        const table = makeTable("PAY_PER_REQUEST", 0, 0);
+        const pool = { rcu: 25, wcu: 25 };
+        const cost = table.estimateCost(100, 86400, pool);
+
+        expect(cost.freeTierSavingsUSD).toBe(0);
+        expect(cost.freeTierRemainingAfter).toEqual(pool);
+
+    });
+
+    it("exposes a 25 RCU + 25 WCU allowance (always-free, not time-limited)", () => {
+
+        const table = makeTable("PROVISIONED", 50, 20);
+        expect(table.getFreeTierAllowance()).toEqual({ rcu: 25, wcu: 25 });
+
+    });
+
+    it("resets every single day - NOT a consumable monthly budget like Lambda/SQS's, but a continuous discount on currently provisioned capacity", () => {
+
+        const table = makeTable("PROVISIONED", 50, 20);
+        expect(table.getFreeTierResetDays()).toBe(1);
+
+    });
+
+});

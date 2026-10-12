@@ -182,6 +182,12 @@
     margin: 0px;
 }
 
+.trafficPuckFreeTierSavings{
+    font-size: 0.8em;
+    color: var(--success);
+    margin: 2px 0px 0px 0px;
+}
+
 /* Rightsizing panel - always visible (not behind the breakdown toggle),
    since this is the headline "is anything wrong" sanity check. */
 .trafficPuckRightsizing{

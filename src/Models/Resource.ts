@@ -1,4 +1,5 @@
-import type { CapacityAssessment, CodeChunk, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, Property, PropertyRecord, ResourceData, Service, ValidationResult } from "../types";
+import type { CapacityAssessment, CodeChunk, CostEstimate, EdgeType, FreeTierPool, NodeDailyWorkload, PermissionType, Property, PropertyRecord, ResourceData, Service, ValidationResult } from "../types";
+import { DAYS_PER_FREE_TIER_MONTH } from "../Simulation/pricing";
 
 
 export interface ResourceStatics{
@@ -40,7 +41,11 @@ export default abstract class Resource{
     // sustained for durationSeconds - the simulation calls this once per
     // traffic-profile point (e.g. once per day) and sums the results, so the
     // cost math here must scale with durationSeconds, not assume a month.
-    abstract estimateCost(workloadRps: number, durationSeconds: number): CostEstimate;
+    // freeTierRemaining is this call's share of the service type's shared
+    // free-tier pool (see getFreeTierAllowance below) - optional/defaulted
+    // to empty so ad-hoc single-call estimates (no pool tracking) still get
+    // correct full-price numbers.
+    abstract estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining?: FreeTierPool): CostEstimate;
 
     // Rightsizing/bottleneck check: given the resolved workload for every
     // point in the traffic profile (not just the peak - a resource can be
@@ -67,6 +72,28 @@ export default abstract class Resource{
     // disagree about where the ceiling is.
     getCapacityCeilingRps(): number | null{
         return null;
+    }
+
+    // The full free-tier allowance for this service type, keyed by the same
+    // metric names as this service's own CostEstimate.breakdown - shared
+    // across every node of this type in the diagram, reset every
+    // getFreeTierResetDays() simulated days with no rollover. Default: none
+    // (most services have no "always free" allowance that isn't tied to an
+    // AWS account's first 12 months - see pricing.ts for which do and why).
+    getFreeTierAllowance(): FreeTierPool{
+        return {};
+    }
+
+    // How many simulated days before the pool above resets to full again.
+    // 30 (one illustrative "month") for a genuinely consumable, usage-based
+    // free tier (Lambda/SQS request counts) - matches AWS's real monthly
+    // reset. DynamoDB overrides this to 1: its provisioned RCU/WCU free tier
+    // isn't a depleting monthly budget at all, it's a continuous discount on
+    // the first N units of CURRENTLY PROVISIONED capacity, which resetting
+    // every single day reproduces correctly (no day's allocation carries
+    // any memory of a previous day's).
+    getFreeTierResetDays(): number{
+        return DAYS_PER_FREE_TIER_MONTH;
     }
 
 

@@ -382,6 +382,13 @@ export default function TrafficPuck(
                 Total estimated cost: ${simulationResult.totalCostUSD.toFixed(2)} over {simulationResult.periodDays} days
             </p>
 
+            {
+                simulationResult.totalFreeTierSavingsUSD > 0 &&
+                <p className="trafficPuckFreeTierSavings">
+                    Includes ${simulationResult.totalFreeTierSavingsUSD.toFixed(2)} saved via AWS's always-free tier (Lambda, SQS, DynamoDB provisioned capacity)
+                </p>
+            }
+
             <RightsizingPanel simulationResult={simulationResult} />
 
             {

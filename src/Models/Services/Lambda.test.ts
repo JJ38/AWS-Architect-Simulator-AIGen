@@ -97,3 +97,54 @@ describe("Lambda.getCapacityCeilingRps", () => {
     });
 
 });
+
+describe("Lambda.estimateCost - free tier", () => {
+
+    it("charges full price when no free tier pool is passed (bare single-call usage)", () => {
+
+        const lambda = makeLambda(null, 200);
+        const cost = lambda.estimateCost(1000, 86400);
+
+        expect(cost.freeTierSavingsUSD).toBe(0);
+        expect(cost.costUSD).toBeGreaterThan(0);
+
+    });
+
+    it("discounts both requests and compute (GB-seconds) independently", () => {
+
+        const lambda = makeLambda(null, 200); // 128MB default, 200ms
+        // 10 req/s * 86400s = 864,000 requests - under a 1M request pool.
+        const cost = lambda.estimateCost(10, 86400, { requests: 1_000_000, compute: 1_000_000 });
+
+        expect(cost.freeTierSavingsUSD).toBeGreaterThan(0);
+        expect(cost.freeTierRemainingAfter.requests).toBeCloseTo(1_000_000 - 864_000);
+        // gbSeconds = 864,000 * (128/1024) * 0.2 = 21,600
+        expect(cost.freeTierRemainingAfter.compute).toBeCloseTo(1_000_000 - 21_600);
+
+    });
+
+    it("bills whatever's left once the request pool runs out, even if compute still has headroom", () => {
+
+        const lambda = makeLambda(null, 200);
+        const cost = lambda.estimateCost(1000, 86400, { requests: 100, compute: 1_000_000_000 });
+
+        expect(cost.freeTierRemainingAfter.requests).toBe(0);
+        expect(cost.breakdown.requests).toBeGreaterThan(0); // almost all requests billed
+
+    });
+
+    it("exposes a 1M requests + 400,000 GB-second allowance (always-free, not time-limited)", () => {
+
+        const lambda = makeLambda(null, 200);
+        expect(lambda.getFreeTierAllowance()).toEqual({ requests: 1_000_000, compute: 400_000 });
+
+    });
+
+    it("resets every 30 days (a genuinely consumable monthly budget, unlike DynamoDB's)", () => {
+
+        const lambda = makeLambda(null, 200);
+        expect(lambda.getFreeTierResetDays()).toBe(30);
+
+    });
+
+});

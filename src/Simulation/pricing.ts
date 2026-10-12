@@ -1,7 +1,15 @@
 // Static, illustrative us-east-1 pricing - not the live AWS Pricing API.
 // Goal is ballpark accuracy (±25%) for comparing architectures, not exact billing.
-// Free tiers are deliberately ignored (illustrative "always pay" numbers are
-// easier to reason about and still roughly right at non-trivial traffic).
+//
+// Free tier: only the "always free" allowances (permanent, not tied to an
+// AWS account's first 12 months) are modeled - this tool is meant to
+// represent an actual, ongoing deployment, and most real production
+// accounts are well past their first year, so a 12-months-only benefit
+// (EC2's 750 micro-hours/mo, S3's 5GB storage + 20K GET + 2K PUT/mo, API
+// Gateway's 1M calls/mo) would overstate savings and is deliberately NOT
+// modeled - see each service's own file for the specific reasoning.
+// Lambda, SQS, and DynamoDB's (provisioned-only) free tiers have no such
+// expiry, so those three are modeled.
 
 export const SECONDS_PER_DAY = 24 * 60 * 60;
 export const HOURS_PER_MONTH = 730;
@@ -110,3 +118,23 @@ export const APIGATEWAYV2_PRICE_PER_MILLION_REQUESTS_USD = 1.00;
 // with this illustrative ratio until the traffic model is richer.
 export const ASSUMED_READ_FRACTION = 0.8;
 export const ASSUMED_WRITE_FRACTION = 0.2;
+
+// Free tier - "always free" allowances only (see the file-top comment for
+// why). Each is a single pool SHARED across every node of that service type
+// in the diagram, not one per individual resource - AWS's free tier is an
+// account/region-wide limit, not a per-resource one (the same reasoning
+// already applied to Lambda's reserved-concurrency pool).
+export const LAMBDA_FREE_REQUESTS_PER_MONTH = 1_000_000;
+export const LAMBDA_FREE_GB_SECONDS_PER_MONTH = 400_000;
+export const SQS_FREE_REQUESTS_PER_MONTH = 1_000_000;
+// DynamoDB's is NOT a consumable monthly budget like the two above - it's a
+// continuous discount on the first N units of CURRENTLY PROVISIONED
+// capacity (you pay $0 for up to 25 RCU/25 WCU forever, not "until you've
+// used up some monthly total"). See DynamoDB.ts's getFreeTierResetDays.
+export const DYNAMODB_PROVISIONED_FREE_RCU = 25;
+export const DYNAMODB_PROVISIONED_FREE_WCU = 25;
+
+// Illustrative "month" length for bucketing a consumable free-tier pool's
+// reset - the traffic profile is day-indexed, not calendar-dated (see
+// trafficProfile.ts), so there's no real calendar to reset against.
+export const DAYS_PER_FREE_TIER_MONTH = 30;

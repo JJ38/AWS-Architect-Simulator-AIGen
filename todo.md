@@ -77,12 +77,60 @@ either repositioning the panel or making it collapsible.
       editable SVG line chart (no charting library) — drag any day's point to
       reshape the curve; see dataviz-skill notes below
 - [x] Per-node cost formulas from a static, illustrative us-east-1 pricing
-      table (`src/Simulation/pricing.ts`) — free tier ignored on purpose
-      (keeps the "always pay" numbers easier to reason about and still
-      roughly right at non-trivial traffic). Formulas take
+      table (`src/Simulation/pricing.ts`). Formulas take
       `(workloadRps, durationSeconds)` rather than assuming a month, so the
       same `Resource.estimateCost` works whether it's called once for a flat
       monthly estimate or once per day across a traffic profile
+- [x] **AWS free tier (reported via real usage: "imagine this is being used
+      on an actual deployment for a real service" - free tier affects real
+      projected costs, so ignoring it entirely was wrong).** Only the
+      "always free" allowances are modeled - ones NOT tied to an AWS
+      account's first 12 months (Lambda: 1M requests + 400,000 GB-seconds/
+      month; SQS: 1M requests/month; DynamoDB provisioned: 25 RCU + 25 WCU).
+      EC2/S3/API Gateway's free tiers are all 12-months-new-account-only and
+      deliberately NOT modeled, since this tool represents an ongoing real
+      deployment, not a brand-new account - modeling them would overstate
+      savings for the actual use case.
+      - Two genuinely different AWS mechanics, modeled correctly as two
+        different reset cadences through the same mechanism rather than
+        conflated: Lambda/SQS's free tier is a **consumable monthly
+        budget** (depletes as requests accrue, resets to full every 30
+        simulated days, no rollover of whatever went unused) - DynamoDB's
+        is a **continuous capacity discount** (the first 25 RCU/WCU of
+        *currently provisioned* capacity are free every single day,
+        independent of usage history - NOT a total that depletes over a
+        month). Implemented as the same `getFreeTierAllowance()` +
+        `getFreeTierResetDays()` pair on `Resource`, with DynamoDB simply
+        overriding the reset cadence to 1 day instead of 30 - mathematically
+        identical to "never depletes", no second mechanism needed.
+      - The allowance is POOLED PER SERVICE TYPE, shared across every node
+        of that type in the diagram, not given to each node individually -
+        mirrors how AWS actually bills (free tier is an account/region
+        limit, not a per-resource one, the same reasoning already applied
+        to Lambda's reserved-concurrency pool). Two small Lambdas share one
+        1M-request budget, not 2M combined.
+      - `estimateCost` gained an optional `freeTierRemaining` parameter
+        (defaults to `{}` = no pool = full price) and `CostEstimate` gained
+        `freeTierSavingsUSD`/`freeTierRemainingAfter` - `simulate.ts`
+        threads the pool through the day loop, resetting it whenever a
+        service's `getFreeTierResetDays()` period boundary is crossed.
+      - 17 new Vitest tests (67 total): per-service free-tier math
+        (SQS/Lambda/DynamoDB, new `SQS.test.ts`), plus `simulate.ts`
+        integration tests proving the pool is genuinely SHARED across nodes
+        (not per-node), that Lambda's pool actually resets at the 30-day
+        boundary (not permanently drained after one heavy day), and that
+        DynamoDB's discount is flat every single day of a 60-day period
+        (not depleting like Lambda's).
+      - Verified end-to-end against the rightsizing test deployment: at
+        realistic (10 req/s flat) traffic, catalog-table (5 RCU/2 WCU
+        provisioned - both under the 25/25 free threshold) correctly costs
+        $0.00 despite still being flagged `critical`/over its own capacity
+        (160% utilization) - provisioned-but-insufficient capacity is still
+        free if it's under the threshold, a genuine and correct interaction
+        between the rightsizing and free-tier engines that composes
+        correctly with zero special-casing. UI: a green "Includes $X.XX
+        saved via AWS's always-free tier" line under the total cost,
+        visible only when savings are actually nonzero.
 - [x] Capacity simulator: `src/Simulation/trafficPropagation.ts` propagates a
       single rps value through the graph using each edge's already-resolved
       `callerID`/`receiverID` (so pull-edge direction is handled automatically

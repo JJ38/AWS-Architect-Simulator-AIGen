@@ -1,6 +1,6 @@
-import type { CapacityAssessment, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, ResourceData, Service, ValidationResult } from "../../types";
+import type { CapacityAssessment, CostEstimate, EdgeType, FreeTierPool, NodeDailyWorkload, PermissionType, ResourceData, Service, ValidationResult } from "../../types";
 import Resource from "../Resource";
-import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, DYNAMODB_ON_DEMAND_PER_MILLION_READ_USD, DYNAMODB_ON_DEMAND_PER_MILLION_WRITE_USD, DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD, DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD, hoursInDuration, requestsOverDuration } from "../../Simulation/pricing";
+import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, DYNAMODB_ON_DEMAND_PER_MILLION_READ_USD, DYNAMODB_ON_DEMAND_PER_MILLION_WRITE_USD, DYNAMODB_PROVISIONED_FREE_RCU, DYNAMODB_PROVISIONED_FREE_WCU, DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD, DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD, hoursInDuration, requestsOverDuration } from "../../Simulation/pricing";
 
 //incomplete look at all types
 export const dynamodb_billing_mode = [
@@ -95,7 +95,21 @@ export default class DyanmoDB extends Resource{
 
     }
 
-    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
+    // "Always free" - 25 RCU + 25 WCU, not tied to an AWS account's first 12
+    // months - but see getFreeTierResetDays, it's NOT a consumable monthly
+    // budget like Lambda/SQS's, it's a continuous discount on currently
+    // provisioned capacity. On-demand tables don't touch this pool at all
+    // (their own free tier is a separate, time-limited, new-account benefit
+    // - deliberately not modeled, see pricing.ts).
+    getFreeTierAllowance(): FreeTierPool{
+        return { rcu: DYNAMODB_PROVISIONED_FREE_RCU, wcu: DYNAMODB_PROVISIONED_FREE_WCU };
+    }
+
+    getFreeTierResetDays(): number{
+        return 1;
+    }
+
+    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
 
         const warnings: string[] = [];
         const billingMode: string = this.terraformProperties?.aws_dynamodb_table?.billing_mode?.value ?? "PAY_PER_REQUEST";
@@ -105,13 +119,28 @@ export default class DyanmoDB extends Resource{
             const readCapacity: number = this.terraformProperties?.aws_dynamodb_table?.read_capacity?.value ?? 0;
             const writeCapacity: number = this.terraformProperties?.aws_dynamodb_table?.write_capacity?.value ?? 0;
 
-            const readCost = readCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds);
-            const writeCost = writeCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
+            const freeRcu = Math.min(readCapacity, Math.max(0, freeTierRemaining.rcu ?? 0));
+            const freeWcu = Math.min(writeCapacity, Math.max(0, freeTierRemaining.wcu ?? 0));
+
+            const billableReadCapacity = readCapacity - freeRcu;
+            const billableWriteCapacity = writeCapacity - freeWcu;
+
+            const readCost = billableReadCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds);
+            const writeCost = billableWriteCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
+
+            const freeTierSavingsUSD =
+                freeRcu * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds) +
+                freeWcu * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
 
             return {
                 costUSD: readCost + writeCost,
                 breakdown: { "read_capacity": readCost, "write_capacity": writeCost },
-                warnings: warnings
+                warnings: warnings,
+                freeTierSavingsUSD,
+                freeTierRemainingAfter: {
+                    rcu: (freeTierRemaining.rcu ?? 0) - freeRcu,
+                    wcu: (freeTierRemaining.wcu ?? 0) - freeWcu
+                }
             };
 
         }
@@ -130,7 +159,9 @@ export default class DyanmoDB extends Resource{
         return {
             costUSD: readCost + writeCost,
             breakdown: { "read_requests": readCost, "write_requests": writeCost },
-            warnings: warnings
+            warnings: warnings,
+            freeTierSavingsUSD: 0,
+            freeTierRemainingAfter: freeTierRemaining
         };
 
     }
