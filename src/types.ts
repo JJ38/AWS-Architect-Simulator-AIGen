@@ -124,21 +124,20 @@ export interface CodeChunk{
 
 export type PermissionType = "IAM" | "Service" | "Passive"; // A passive service should only ever show up as a pull source
 
-// Free-tier units remaining for a service type's consumable free tier,
+// A service type's free-tier allowance in DOLLAR terms (not raw units),
 // keyed by the same metric names as that service's own
-// CostEstimate.breakdown (e.g. Lambda: {requests, compute}). Shared across
-// every node of that service type in the diagram and threaded call-to-call
-// through estimateCost - mirrors AWS's actual account/region-wide, not
-// per-resource, free tier. Empty for services with no modeled free tier.
+// CostEstimate.breakdown (e.g. Lambda: {requests, compute}) and already
+// scaled to whatever period getFreeTierResetDays() covers. Expressing it in
+// $ (rather than request counts/RCU/etc.) lets simulate.ts compare it
+// directly against accumulated breakdown totals without needing to know
+// anything about a given service's pricing - see Resource.getFreeTierAllowance.
 export type FreeTierPool = Record<string, number>;
 
 export interface CostEstimate{
 
     costUSD: number, // cost for whatever durationSeconds was passed to estimateCost() - not necessarily a month
     breakdown: Record<string, number>, // e.g. {"compute": 12.3, "requests": 0.4} - sums to costUSD
-    warnings: string[],
-    freeTierSavingsUSD: number, // $ this call was discounted via free tier - 0 if none applies/none left
-    freeTierRemainingAfter: FreeTierPool // the pool's balance after this call, for the next call this period
+    warnings: string[]
 
 }
 

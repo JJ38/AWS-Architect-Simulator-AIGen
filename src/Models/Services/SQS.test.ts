@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import SQS from "./SQS";
+import { SQS_FREE_REQUESTS_PER_MONTH, SQS_PRICE_PER_MILLION_REQUESTS_USD } from "../../Simulation/pricing";
 import type { ResourceData, Service } from "../../types";
 
 const SQS_SERVICE: Service = { name: "SQS", description: "Simple Queue Service", terraformType: "resource", providerTypes: ["aws_sqs_queue"], icon: "", image: "" };
@@ -9,46 +10,38 @@ function makeSQS(): SQS{
     return new SQS(data);
 }
 
-describe("SQS.estimateCost - free tier", () => {
+describe("SQS.estimateCost", () => {
 
-    it("charges full price when no free tier pool is passed (bare single-call usage)", () => {
+    it("always returns full price - free tier is applied separately, across nodes, by simulate.ts", () => {
 
         const sqs = makeSQS();
-        // 1000 req/s * 86400s = 86.4M requests - well past any plausible free tier.
-        const cost = sqs.estimateCost(1000, 86400);
+        const cost = sqs.estimateCost(10, 86400);
 
-        expect(cost.freeTierSavingsUSD).toBe(0);
         expect(cost.costUSD).toBeGreaterThan(0);
+        expect(cost.breakdown.requests).toBe(cost.costUSD);
 
     });
 
-    it("discounts requests covered by the free tier pool", () => {
+});
+
+// getFreeTierAllowance is expressed in $ (not raw request counts) so
+// simulate.ts can compare it directly against accumulated $ breakdown
+// totals without needing to know SQS's own pricing - see pricing.ts.
+describe("SQS.getFreeTierAllowance", () => {
+
+    it("exposes the $ equivalent of 1,000,000 requests/month (always-free, not time-limited)", () => {
 
         const sqs = makeSQS();
-        // 10 req/s * 86400s = 864,000 requests - entirely inside a 1M pool.
-        const cost = sqs.estimateCost(10, 86400, { requests: 1_000_000 });
+        const expectedUSD = SQS_FREE_REQUESTS_PER_MONTH * SQS_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
 
-        expect(cost.costUSD).toBe(0);
-        expect(cost.freeTierSavingsUSD).toBeGreaterThan(0);
-        expect(cost.freeTierRemainingAfter.requests).toBeCloseTo(1_000_000 - 864_000);
+        expect(sqs.getFreeTierAllowance(30 * 86400)).toEqual({ requests: expectedUSD });
 
     });
 
-    it("only discounts the portion that fits in the remaining pool, billing the rest", () => {
+    it("resets every 30 days - a genuinely consumable monthly budget", () => {
 
         const sqs = makeSQS();
-        // 1000 req/s * 86400s = 86.4M requests, but only 500,000 free left.
-        const cost = sqs.estimateCost(1000, 86400, { requests: 500_000 });
-
-        expect(cost.freeTierRemainingAfter.requests).toBe(0);
-        expect(cost.costUSD).toBeGreaterThan(0); // the 85.9M over the free amount is billed
-
-    });
-
-    it("exposes a 1,000,000 requests/month allowance (always-free, not time-limited)", () => {
-
-        const sqs = makeSQS();
-        expect(sqs.getFreeTierAllowance()).toEqual({ requests: 1_000_000 });
+        expect(sqs.getFreeTierResetDays()).toBe(30);
 
     });
 

@@ -52,27 +52,23 @@ export default class SQS extends Resource{
 
     // "Always free" - 1M requests/month, not tied to an AWS account's first
     // 12 months (unlike S3/API Gateway's time-limited tiers), so it's
-    // modeled - see pricing.ts.
-    getFreeTierAllowance(): FreeTierPool{
-        return { requests: SQS_FREE_REQUESTS_PER_MONTH };
+    // modeled - see pricing.ts. Expressed in $ (the allowance's dollar
+    // equivalent at full price) so simulate.ts can compare it directly
+    // against accumulated breakdown totals.
+    getFreeTierAllowance(periodDurationSeconds: number): FreeTierPool{
+        void periodDurationSeconds; // unused - SQS's allowance is a flat request count, not a rate, so it needs no period scaling (unlike DynamoDB's)
+        return { requests: SQS_FREE_REQUESTS_PER_MONTH * SQS_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000 };
     }
 
-    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const requests = requestsOverDuration(workloadRps, durationSeconds);
-
-        const freeRequests = Math.min(requests, Math.max(0, freeTierRemaining.requests ?? 0));
-        const billableRequests = requests - freeRequests;
-
-        const requestCost = billableRequests * SQS_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
-        const freeTierSavingsUSD = freeRequests * SQS_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
+        const requestCost = requests * SQS_PRICE_PER_MILLION_REQUESTS_USD / 1_000_000;
 
         return {
             costUSD: requestCost,
             breakdown: { "requests": requestCost },
-            warnings: [],
-            freeTierSavingsUSD,
-            freeTierRemainingAfter: { requests: (freeTierRemaining.requests ?? 0) - freeRequests }
+            warnings: []
         };
 
     }

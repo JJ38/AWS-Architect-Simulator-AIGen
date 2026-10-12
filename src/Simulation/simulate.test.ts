@@ -171,4 +171,40 @@ describe("runSimulation - free tier pooling across nodes of the same service typ
 
     });
 
+    // Reported via real usage: with a sequential/depleting pool, whichever
+    // node happened to be processed first could claim the ENTIRE free tier
+    // and leave a near-identical node paying full price - an arbitrary,
+    // order-dependent split. The fix: compute each service type's TOTAL
+    // usage first, then give every node of that type the SAME fraction off,
+    // so the discount is shared fairly rather than winner-take-all.
+    it("splits the free-tier discount fairly (by usage share) across nodes when combined usage exceeds the pool - not winner-take-all by processing order", () => {
+
+        const lambdaA = makeNode("lambda-a", Lambda, "Lambda", () => {});
+        const lambdaB = makeNode("lambda-b", Lambda, "Lambda", () => {});
+        const sinkA = makeNode("sink-a", DynamoDB, "DynamoDB", (data) => {
+            data.terraformProperties.aws_dynamodb_table.billing_mode.value = "PAY_PER_REQUEST";
+        });
+        const sinkB = makeNode("sink-b", DynamoDB, "DynamoDB", (data) => {
+            data.terraformProperties.aws_dynamodb_table.billing_mode.value = "PAY_PER_REQUEST";
+        });
+        const edges = [makeEdge("lambda-a", "sink-a"), makeEdge("lambda-b", "sink-b")];
+
+        // Equal traffic on both - 12 req/s * 86400s = 1,036,800 requests
+        // each, 2,073,600 combined - just over the 1,000,000 pool. Being
+        // identical, a fair split means BOTH end up with the same nonzero
+        // cost and the same nonzero savings - neither one $0 while the
+        // other pays for the whole overage.
+        const profile = createFlatProfile(1, 12);
+        const result = runSimulation([lambdaA, lambdaB, sinkA, sinkB], edges, profile);
+
+        const a = getResult(result, "lambda-a");
+        const b = getResult(result, "lambda-b");
+
+        expect(a.costUSD).toBeGreaterThan(0);
+        expect(b.costUSD).toBeGreaterThan(0);
+        expect(a.costUSD).toBeCloseTo(b.costUSD, 5);
+        expect(a.freeTierSavingsUSD).toBeCloseTo(b.freeTierSavingsUSD, 5);
+
+    });
+
 });

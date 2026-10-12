@@ -100,16 +100,23 @@ export default class DyanmoDB extends Resource{
     // budget like Lambda/SQS's, it's a continuous discount on currently
     // provisioned capacity. On-demand tables don't touch this pool at all
     // (their own free tier is a separate, time-limited, new-account benefit
-    // - deliberately not modeled, see pricing.ts).
-    getFreeTierAllowance(): FreeTierPool{
-        return { rcu: DYNAMODB_PROVISIONED_FREE_RCU, wcu: DYNAMODB_PROVISIONED_FREE_WCU };
+    // - deliberately not modeled, see pricing.ts). Expressed in $, scaled to
+    // periodDurationSeconds (getFreeTierResetDays() x one day, i.e. 24
+    // hours) since RCU/WCU pricing is itself an hourly rate - keys match
+    // estimateCost's own breakdown keys ("read_capacity"/"write_capacity")
+    // so simulate.ts can compare them directly.
+    getFreeTierAllowance(periodDurationSeconds: number): FreeTierPool{
+        return {
+            read_capacity: DYNAMODB_PROVISIONED_FREE_RCU * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(periodDurationSeconds),
+            write_capacity: DYNAMODB_PROVISIONED_FREE_WCU * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(periodDurationSeconds)
+        };
     }
 
     getFreeTierResetDays(): number{
         return 1;
     }
 
-    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
         const billingMode: string = this.terraformProperties?.aws_dynamodb_table?.billing_mode?.value ?? "PAY_PER_REQUEST";
@@ -119,28 +126,13 @@ export default class DyanmoDB extends Resource{
             const readCapacity: number = this.terraformProperties?.aws_dynamodb_table?.read_capacity?.value ?? 0;
             const writeCapacity: number = this.terraformProperties?.aws_dynamodb_table?.write_capacity?.value ?? 0;
 
-            const freeRcu = Math.min(readCapacity, Math.max(0, freeTierRemaining.rcu ?? 0));
-            const freeWcu = Math.min(writeCapacity, Math.max(0, freeTierRemaining.wcu ?? 0));
-
-            const billableReadCapacity = readCapacity - freeRcu;
-            const billableWriteCapacity = writeCapacity - freeWcu;
-
-            const readCost = billableReadCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds);
-            const writeCost = billableWriteCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
-
-            const freeTierSavingsUSD =
-                freeRcu * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds) +
-                freeWcu * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
+            const readCost = readCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * hoursInDuration(durationSeconds);
+            const writeCost = writeCapacity * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * hoursInDuration(durationSeconds);
 
             return {
                 costUSD: readCost + writeCost,
                 breakdown: { "read_capacity": readCost, "write_capacity": writeCost },
-                warnings: warnings,
-                freeTierSavingsUSD,
-                freeTierRemainingAfter: {
-                    rcu: (freeTierRemaining.rcu ?? 0) - freeRcu,
-                    wcu: (freeTierRemaining.wcu ?? 0) - freeWcu
-                }
+                warnings: warnings
             };
 
         }
@@ -159,9 +151,7 @@ export default class DyanmoDB extends Resource{
         return {
             costUSD: readCost + writeCost,
             breakdown: { "read_requests": readCost, "write_requests": writeCost },
-            warnings: warnings,
-            freeTierSavingsUSD: 0,
-            freeTierRemainingAfter: freeTierRemaining
+            warnings: warnings
         };
 
     }

@@ -224,7 +224,15 @@ function CostBreakdownTable({ simulationResult }: { simulationResult: Simulation
                                     <td className="trafficPuckTableMono">{nodeResult.nodeId}</td>
                                     <td className="trafficPuckTableMono">{nodeResult.averageWorkloadRps.toFixed(2)}</td>
                                     <td className="trafficPuckTableMono">{nodeResult.peakWorkloadRps.toFixed(2)} ({nodeResult.peakLabel})</td>
-                                    <td className="trafficPuckTableMono">${nodeResult.costUSD.toFixed(2)}</td>
+                                    <td className="trafficPuckTableMono">
+                                        ${nodeResult.costUSD.toFixed(2)}
+                                        {
+                                            nodeResult.freeTierSavingsUSD > 0 &&
+                                            <div className="trafficPuckFreeTierNote">
+                                                {nodeResult.costUSD === 0 ? "free tier" : `−$${nodeResult.freeTierSavingsUSD.toFixed(2)} free tier`}
+                                            </div>
+                                        }
+                                    </td>
                                     <td><CapacityBadge capacity={nodeResult.capacity} /></td>
                                     <td>
                                         {

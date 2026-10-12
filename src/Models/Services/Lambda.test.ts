@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import Lambda from "./Lambda";
+import { LAMBDA_FREE_GB_SECONDS_PER_MONTH, LAMBDA_FREE_REQUESTS_PER_MONTH, LAMBDA_PRICE_PER_GB_SECOND_USD, LAMBDA_PRICE_PER_REQUEST_USD } from "../../Simulation/pricing";
 import type { NodeDailyWorkload, ResourceData, Service } from "../../types";
 
 const LAMBDA_SERVICE: Service = { name: "Lambda", description: "Serverless Computing Service", terraformType: "resource", providerTypes: ["aws_lambda_function"], icon: "", image: "" };
@@ -98,45 +99,34 @@ describe("Lambda.getCapacityCeilingRps", () => {
 
 });
 
-describe("Lambda.estimateCost - free tier", () => {
+describe("Lambda.estimateCost", () => {
 
-    it("charges full price when no free tier pool is passed (bare single-call usage)", () => {
+    it("always returns full price - free tier is applied separately, across nodes, by simulate.ts", () => {
 
         const lambda = makeLambda(null, 200);
         const cost = lambda.estimateCost(1000, 86400);
 
-        expect(cost.freeTierSavingsUSD).toBe(0);
         expect(cost.costUSD).toBeGreaterThan(0);
+        expect(cost.breakdown.requests + cost.breakdown.compute).toBeCloseTo(cost.costUSD);
 
     });
 
-    it("discounts both requests and compute (GB-seconds) independently", () => {
+});
 
-        const lambda = makeLambda(null, 200); // 128MB default, 200ms
-        // 10 req/s * 86400s = 864,000 requests - under a 1M request pool.
-        const cost = lambda.estimateCost(10, 86400, { requests: 1_000_000, compute: 1_000_000 });
+// getFreeTierAllowance is expressed in $ (not raw request/GB-second counts)
+// so simulate.ts can compare it directly against accumulated $ breakdown
+// totals without needing to know Lambda's own pricing - see pricing.ts.
+describe("Lambda.getFreeTierAllowance", () => {
 
-        expect(cost.freeTierSavingsUSD).toBeGreaterThan(0);
-        expect(cost.freeTierRemainingAfter.requests).toBeCloseTo(1_000_000 - 864_000);
-        // gbSeconds = 864,000 * (128/1024) * 0.2 = 21,600
-        expect(cost.freeTierRemainingAfter.compute).toBeCloseTo(1_000_000 - 21_600);
-
-    });
-
-    it("bills whatever's left once the request pool runs out, even if compute still has headroom", () => {
+    it("exposes the $ equivalent of 1M requests + 400,000 GB-seconds/month (always-free, not time-limited)", () => {
 
         const lambda = makeLambda(null, 200);
-        const cost = lambda.estimateCost(1000, 86400, { requests: 100, compute: 1_000_000_000 });
+        const expected = {
+            requests: LAMBDA_FREE_REQUESTS_PER_MONTH * LAMBDA_PRICE_PER_REQUEST_USD,
+            compute: LAMBDA_FREE_GB_SECONDS_PER_MONTH * LAMBDA_PRICE_PER_GB_SECOND_USD
+        };
 
-        expect(cost.freeTierRemainingAfter.requests).toBe(0);
-        expect(cost.breakdown.requests).toBeGreaterThan(0); // almost all requests billed
-
-    });
-
-    it("exposes a 1M requests + 400,000 GB-second allowance (always-free, not time-limited)", () => {
-
-        const lambda = makeLambda(null, 200);
-        expect(lambda.getFreeTierAllowance()).toEqual({ requests: 1_000_000, compute: 400_000 });
+        expect(lambda.getFreeTierAllowance(30 * 86400)).toEqual(expected);
 
     });
 

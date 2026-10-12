@@ -41,11 +41,11 @@ export default abstract class Resource{
     // sustained for durationSeconds - the simulation calls this once per
     // traffic-profile point (e.g. once per day) and sums the results, so the
     // cost math here must scale with durationSeconds, not assume a month.
-    // freeTierRemaining is this call's share of the service type's shared
-    // free-tier pool (see getFreeTierAllowance below) - optional/defaulted
-    // to empty so ad-hoc single-call estimates (no pool tracking) still get
-    // correct full-price numbers.
-    abstract estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining?: FreeTierPool): CostEstimate;
+    // Always full price - free tier is applied afterward, across every node
+    // of a service type at once (see simulate.ts and getFreeTierAllowance
+    // below), not per individual call, since the discount has to be shared
+    // fairly across nodes rather than handed to whichever one asks first.
+    abstract estimateCost(workloadRps: number, durationSeconds: number): CostEstimate;
 
     // Rightsizing/bottleneck check: given the resolved workload for every
     // point in the traffic profile (not just the peak - a resource can be
@@ -74,13 +74,18 @@ export default abstract class Resource{
         return null;
     }
 
-    // The full free-tier allowance for this service type, keyed by the same
-    // metric names as this service's own CostEstimate.breakdown - shared
-    // across every node of this type in the diagram, reset every
-    // getFreeTierResetDays() simulated days with no rollover. Default: none
-    // (most services have no "always free" allowance that isn't tied to an
-    // AWS account's first 12 months - see pricing.ts for which do and why).
-    getFreeTierAllowance(): FreeTierPool{
+    // The free-tier allowance for this service type, in DOLLAR terms, keyed
+    // by the same metric names as this service's own CostEstimate.breakdown
+    // - already scaled to cover exactly one getFreeTierResetDays()-long
+    // period (periodDurationSeconds is that period's length in seconds, so
+    // a rate-based allowance like DynamoDB's RCU-hours can size itself
+    // correctly regardless of whether the reset cadence is 1 day or 30).
+    // Shared across every node of this service type in the diagram - see
+    // simulate.ts for how the discount gets split fairly across them rather
+    // than handed entirely to one. Default: none (most services have no
+    // "always free" allowance that isn't tied to an AWS account's first 12
+    // months - see pricing.ts for which do and why).
+    getFreeTierAllowance(periodDurationSeconds: number): FreeTierPool{
         return {};
     }
 

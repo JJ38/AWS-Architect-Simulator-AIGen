@@ -1,5 +1,5 @@
 import Resource from "../Resource";
-import type { CostEstimate, FreeTierPool, Service, ValidationResult, EdgeType, ResourceData, PermissionType, PropertyRecord } from "../../types.ts";
+import type { CostEstimate, Service, ValidationResult, EdgeType, ResourceData, PermissionType, PropertyRecord } from "../../types.ts";
 import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, S3_GET_PRICE_PER_REQUEST_USD, S3_PUT_PRICE_PER_REQUEST_USD, S3_STORAGE_PER_GB_MONTH_USD, monthFractionOfDuration, requestsOverDuration } from "../../Simulation/pricing.ts";
 
 
@@ -90,7 +90,7 @@ export default class S3 extends Resource{
 
     // No free tier modeled: S3's 5GB storage + 20K GET + 2K PUT/month only
     // applies for an AWS account's first 12 months - see pricing.ts.
-    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
         const storageGB: number = this.componentProperties?.simulation?.estimated_storage_gb?.value ?? 0;
@@ -118,9 +118,7 @@ export default class S3 extends Resource{
         return {
             costUSD: storageCost + requestCost,
             breakdown: { "storage": storageCost, "requests": requestCost },
-            warnings: warnings,
-            freeTierSavingsUSD: 0,
-            freeTierRemainingAfter: freeTierRemaining
+            warnings: warnings
         };
 
     }

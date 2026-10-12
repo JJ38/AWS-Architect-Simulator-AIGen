@@ -108,11 +108,18 @@ export default class Lambda extends Resource{
 
     // "Always free" - 1M requests + 400,000 GB-seconds/month, not tied to an
     // AWS account's first 12 months, so it's modeled - see pricing.ts.
-    getFreeTierAllowance(): FreeTierPool{
-        return { requests: LAMBDA_FREE_REQUESTS_PER_MONTH, compute: LAMBDA_FREE_GB_SECONDS_PER_MONTH };
+    // Expressed in $ (the allowance's dollar equivalent at full price) so
+    // simulate.ts can compare it directly against accumulated breakdown
+    // totals without needing to know Lambda's own pricing constants.
+    getFreeTierAllowance(periodDurationSeconds: number): FreeTierPool{
+        void periodDurationSeconds; // unused - Lambda's allowance is a flat request/GB-second count, not a rate, so it needs no period scaling (unlike DynamoDB's)
+        return {
+            requests: LAMBDA_FREE_REQUESTS_PER_MONTH * LAMBDA_PRICE_PER_REQUEST_USD,
+            compute: LAMBDA_FREE_GB_SECONDS_PER_MONTH * LAMBDA_PRICE_PER_GB_SECOND_USD
+        };
     }
 
-    estimateCost(workloadRps: number, durationSeconds: number, freeTierRemaining: FreeTierPool = {}): CostEstimate {
+    estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
         const memoryMB: number = this.terraformProperties?.aws_lambda_function?.memory_size?.value ?? LAMBDA_DEFAULT_MEMORY_MB;
@@ -130,26 +137,13 @@ export default class Lambda extends Resource{
         const requests = requestsOverDuration(workloadRps, durationSeconds);
         const gbSeconds = requests * (memoryMB / 1024) * (avgDurationMs / 1000);
 
-        const freeRequests = Math.min(requests, Math.max(0, freeTierRemaining.requests ?? 0));
-        const freeGbSeconds = Math.min(gbSeconds, Math.max(0, freeTierRemaining.compute ?? 0));
-
-        const billableRequests = requests - freeRequests;
-        const billableGbSeconds = gbSeconds - freeGbSeconds;
-
-        const requestCost = billableRequests * LAMBDA_PRICE_PER_REQUEST_USD;
-        const computeCost = billableGbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
-
-        const freeTierSavingsUSD = freeRequests * LAMBDA_PRICE_PER_REQUEST_USD + freeGbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
+        const requestCost = requests * LAMBDA_PRICE_PER_REQUEST_USD;
+        const computeCost = gbSeconds * LAMBDA_PRICE_PER_GB_SECOND_USD;
 
         return {
             costUSD: requestCost + computeCost,
             breakdown: { "requests": requestCost, "compute": computeCost },
-            warnings: warnings,
-            freeTierSavingsUSD,
-            freeTierRemainingAfter: {
-                requests: (freeTierRemaining.requests ?? 0) - freeRequests,
-                compute: (freeTierRemaining.compute ?? 0) - freeGbSeconds
-            }
+            warnings: warnings
         };
 
     }

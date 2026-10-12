@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import DynamoDB from "./DynamoDB";
+import { DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD, DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD } from "../../Simulation/pricing";
 import type { NodeDailyWorkload, ResourceData, Service } from "../../types";
 
 const DYNAMODB_SERVICE: Service = { name: "DynamoDB", description: "DynamoDB", terraformType: "resource", providerTypes: ["aws_dynamodb_table"], icon: "", image: "" };
@@ -93,46 +94,47 @@ describe("DynamoDB.getCapacityCeilingRps", () => {
 
 });
 
-describe("DynamoDB.estimateCost - free tier", () => {
+describe("DynamoDB.estimateCost", () => {
 
-    it("charges full price for provisioned capacity when no free tier pool is passed", () => {
+    it("always returns full price - free tier is applied separately, across nodes, by simulate.ts", () => {
 
         const table = makeTable("PROVISIONED", 50, 20);
         const cost = table.estimateCost(100, 86400);
 
-        expect(cost.freeTierSavingsUSD).toBe(0);
         expect(cost.costUSD).toBeGreaterThan(0);
+        expect(cost.breakdown.read_capacity + cost.breakdown.write_capacity).toBeCloseTo(cost.costUSD);
 
     });
 
-    it("discounts up to 25 RCU/WCU of provisioned capacity, billing only the excess", () => {
+});
 
-        const table = makeTable("PROVISIONED", 50, 20); // 20 WCU is entirely under the 25 free
-        const cost = table.estimateCost(100, 86400, { rcu: 25, wcu: 25 });
+// getFreeTierAllowance is expressed in $ (not raw RCU/WCU counts), scaled to
+// whatever period length is passed in, since RCU/WCU pricing is itself an
+// hourly rate - keys match estimateCost's own breakdown keys
+// ("read_capacity"/"write_capacity") so simulate.ts can compare them
+// directly without needing to know DynamoDB's own pricing.
+describe("DynamoDB.getFreeTierAllowance", () => {
 
-        // only 50 - 25 = 25 RCU billed; all 20 WCU free, 0 WCU billed
-        expect(cost.breakdown.write_capacity).toBe(0);
-        expect(cost.breakdown.read_capacity).toBeGreaterThan(0);
-        expect(cost.freeTierSavingsUSD).toBeGreaterThan(0);
-        expect(cost.freeTierRemainingAfter).toEqual({ rcu: 0, wcu: 5 });
-
-    });
-
-    it("on-demand tables don't touch the rcu/wcu pool at all - it passes through unchanged", () => {
-
-        const table = makeTable("PAY_PER_REQUEST", 0, 0);
-        const pool = { rcu: 25, wcu: 25 };
-        const cost = table.estimateCost(100, 86400, pool);
-
-        expect(cost.freeTierSavingsUSD).toBe(0);
-        expect(cost.freeTierRemainingAfter).toEqual(pool);
-
-    });
-
-    it("exposes a 25 RCU + 25 WCU allowance (always-free, not time-limited)", () => {
+    it("exposes the $ equivalent of 25 RCU + 25 WCU for a 1-day period (always-free, not time-limited)", () => {
 
         const table = makeTable("PROVISIONED", 50, 20);
-        expect(table.getFreeTierAllowance()).toEqual({ rcu: 25, wcu: 25 });
+        const oneDaySeconds = 86400;
+        const expected = {
+            read_capacity: 25 * DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD * 24,
+            write_capacity: 25 * DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD * 24
+        };
+
+        expect(table.getFreeTierAllowance(oneDaySeconds)).toEqual(expected);
+
+    });
+
+    it("scales with the period length passed in", () => {
+
+        const table = makeTable("PROVISIONED", 50, 20);
+        const oneDay = table.getFreeTierAllowance(86400);
+        const twoDays = table.getFreeTierAllowance(86400 * 2);
+
+        expect(twoDays.read_capacity).toBeCloseTo(oneDay.read_capacity * 2);
 
     });
 

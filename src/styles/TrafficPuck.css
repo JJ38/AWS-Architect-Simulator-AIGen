@@ -381,3 +381,13 @@
     font-size: 0.8em;
     font-family: var(--font-sans);
 }
+
+/* Sits directly under a node's own $/period figure - the point is that free
+   tier is visible per-row, not only as a disconnected total elsewhere, so a
+   reader never has to wonder whether a given number already accounts for it. */
+.trafficPuckFreeTierNote{
+    color: var(--success);
+    font-size: 0.78em;
+    font-family: var(--font-sans);
+    white-space: nowrap;
+}

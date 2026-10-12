@@ -1,4 +1,4 @@
-import type { AppEdge, AppNode, CapacityAssessment, FreeTierPool, NodeDailyWorkload } from "../types";
+import type { AppEdge, AppNode, CapacityAssessment, NodeDailyWorkload } from "../types";
 import type { ResourceStatics } from "../Models/Resource";
 import { resourceContainer } from "../constants";
 import { propagateTraffic } from "./trafficPropagation";
@@ -109,16 +109,24 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
     // - identical every iteration, so the last day's value is as good as any.
     let hasDownstreamEdges = new Set<string>();
 
-    // Free tier: one pool PER SERVICE TYPE (not per node - mirrors AWS's
-    // actual account/region-wide, not per-resource, free tier), reset every
-    // getFreeTierResetDays() simulated days with no rollover of whatever
-    // went unused. Nodes of the same service type processed later the same
-    // day/period see whatever the earlier ones left in the pool - a minor,
-    // documented simplification (node-array order decides who gets first
-    // claim within a period) that's appropriate for a ballpark tool, not
-    // exact billing.
-    const freeTierPoolByService = new Map<string, FreeTierPool>();
-    const freeTierPeriodIndexByService = new Map<string, number>();
+    // Free tier bookkeeping: estimateCost always returns FULL price - the
+    // discount is applied afterward, as an EVEN CREDIT across every node of
+    // a service type (see the redistribution pass below), not handed to
+    // whichever node happens to be processed first. To do that fairly we
+    // need, per (service type, free-tier reset period), both the service-
+    // wide total full-price breakdown AND each individual node's own share
+    // of it - bucketed by period since Lambda/SQS reset every ~30 days and
+    // DynamoDB resets every single day.
+    const periodServiceBreakdown = new Map<string, Map<number, Record<string, number>>>();
+    const periodNodeBreakdown = new Map<string, Map<number, Record<string, number>>>();
+
+    function addToPeriodBreakdown(store: Map<string, Map<number, Record<string, number>>>, key: string, periodIndex: number, breakdown: Record<string, number>): void{
+        const periods = store.get(key) ?? new Map<number, Record<string, number>>();
+        const existing = periods.get(periodIndex) ?? {};
+        addToBreakdown(existing, breakdown);
+        periods.set(periodIndex, existing);
+        store.set(key, periods);
+    }
 
     trafficProfile.points.forEach((point, dayIndex) => {
 
@@ -136,22 +144,11 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
             const resource: ResourceStatics = resourceContainer[serviceName];
             const resourceInstance = new resource(node.data);
 
-            const resetDays = resourceInstance.getFreeTierResetDays();
-            const periodIndex = Math.floor(dayIndex / resetDays);
-
-            if(freeTierPeriodIndexByService.get(serviceName) !== periodIndex){
-                freeTierPoolByService.set(serviceName, resourceInstance.getFreeTierAllowance());
-                freeTierPeriodIndexByService.set(serviceName, periodIndex);
-            }
-
-            const freeTierRemaining = freeTierPoolByService.get(serviceName) ?? {};
-            const dayCost = resourceInstance.estimateCost(nodeWorkloadRps, SECONDS_PER_DAY, freeTierRemaining);
-            freeTierPoolByService.set(serviceName, dayCost.freeTierRemainingAfter);
+            const dayCost = resourceInstance.estimateCost(nodeWorkloadRps, SECONDS_PER_DAY);
 
             accumulator.rpsSum += nodeWorkloadRps;
-            accumulator.costUSD += dayCost.costUSD;
-            accumulator.freeTierSavingsUSD += dayCost.freeTierSavingsUSD;
-            addToBreakdown(accumulator.breakdown, dayCost.breakdown);
+            accumulator.costUSD += dayCost.costUSD; // full price for now - corrected below
+            addToBreakdown(accumulator.breakdown, dayCost.breakdown); // full price for now - corrected below
             dayCost.warnings.forEach((warning) => accumulator.dayWarnings.add(warning));
             accumulator.dailyWorkload.push({ label: point.label, rps: nodeWorkloadRps });
             accumulator.peakDroppedRps = Math.max(accumulator.peakDroppedRps, nodeDroppedRps);
@@ -161,7 +158,69 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
                 accumulator.peakLabel = point.label;
             }
 
+            const resetDays = resourceInstance.getFreeTierResetDays();
+            const periodIndex = Math.floor(dayIndex / resetDays);
+
+            addToPeriodBreakdown(periodNodeBreakdown, node.id, periodIndex, dayCost.breakdown);
+            addToPeriodBreakdown(periodServiceBreakdown, serviceName, periodIndex, dayCost.breakdown);
+
         }
+
+    });
+
+    // Free tier redistribution: for each period a service resets in, work
+    // out what FRACTION of that period's total usage (summed across every
+    // node of that type) the free allowance covers, then give every node
+    // that same fraction off. If combined usage is within the allowance,
+    // the fraction is 100% and every node ends up at exactly $0 - not just
+    // whichever node happened to be processed first; if usage is over the
+    // allowance, every node's bill is reduced by the same proportion,
+    // sharing the credit fairly rather than handing it entirely to one node.
+    nodes.forEach((node) => {
+
+        const accumulator = accumulators.get(node.id)!;
+        const serviceName = node.data.service.name!;
+        const resource: ResourceStatics = resourceContainer[serviceName];
+        const resourceInstance = new resource(node.data);
+
+        const periodDurationSeconds = resourceInstance.getFreeTierResetDays() * SECONDS_PER_DAY;
+        const allowanceUSD = resourceInstance.getFreeTierAllowance(periodDurationSeconds);
+
+        const nodePeriods = periodNodeBreakdown.get(node.id) ?? new Map<number, Record<string, number>>();
+        const servicePeriods = periodServiceBreakdown.get(serviceName) ?? new Map<number, Record<string, number>>();
+
+        let discountedCostUSD = 0;
+        let savingsUSD = 0;
+        const discountedBreakdown: Record<string, number> = {};
+
+        for(const [periodIndex, nodeMetrics] of nodePeriods){
+
+            const serviceMetrics = servicePeriods.get(periodIndex) ?? {};
+
+            for(const metric of Object.keys(nodeMetrics)){
+
+                const nodeMetricUSD = nodeMetrics[metric];
+                const serviceMetricUSD = serviceMetrics[metric] ?? 0;
+                const metricAllowanceUSD = allowanceUSD[metric] ?? 0;
+
+                const coveredFraction = serviceMetricUSD > 0
+                    ? Math.min(serviceMetricUSD, metricAllowanceUSD) / serviceMetricUSD
+                    : 0;
+
+                const nodeFreeUSD = nodeMetricUSD * coveredFraction;
+                const nodeBillableUSD = nodeMetricUSD - nodeFreeUSD;
+
+                discountedBreakdown[metric] = (discountedBreakdown[metric] ?? 0) + nodeBillableUSD;
+                discountedCostUSD += nodeBillableUSD;
+                savingsUSD += nodeFreeUSD;
+
+            }
+
+        }
+
+        accumulator.costUSD = discountedCostUSD;
+        accumulator.breakdown = discountedBreakdown;
+        accumulator.freeTierSavingsUSD = savingsUSD;
 
     });
 

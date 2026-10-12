@@ -109,28 +109,52 @@ either repositioning the panel or making it collapsible.
         limit, not a per-resource one, the same reasoning already applied
         to Lambda's reserved-concurrency pool). Two small Lambdas share one
         1M-request budget, not 2M combined.
-      - `estimateCost` gained an optional `freeTierRemaining` parameter
-        (defaults to `{}` = no pool = full price) and `CostEstimate` gained
-        `freeTierSavingsUSD`/`freeTierRemainingAfter` - `simulate.ts`
-        threads the pool through the day loop, resetting it whenever a
-        service's `getFreeTierResetDays()` period boundary is crossed.
-      - 17 new Vitest tests (67 total): per-service free-tier math
-        (SQS/Lambda/DynamoDB, new `SQS.test.ts`), plus `simulate.ts`
-        integration tests proving the pool is genuinely SHARED across nodes
-        (not per-node), that Lambda's pool actually resets at the 30-day
-        boundary (not permanently drained after one heavy day), and that
-        DynamoDB's discount is flat every single day of a 60-day period
-        (not depleting like Lambda's).
+      - **Revised after feedback, twice.** First pass threaded a single
+        depleting pool sequentially through the day loop (whichever node got
+        processed first claimed the discount, the next node of the same
+        type got whatever was left). User caught the real problem this
+        caused: with combined usage over the allowance, that's an arbitrary,
+        order-dependent split - one node could show $0 while an
+        near-identical one paid for the whole overage. Reworked to a fair-
+        share model instead: `estimateCost` always returns full price (no
+        pool parameter at all anymore); `simulate.ts` separately accumulates
+        each node's AND each service type's total full-price breakdown per
+        free-tier reset period, then computes what FRACTION of the period's
+        total the allowance covers and gives every node of that type the
+        same fraction off. If combined usage is within the allowance, every
+        node is guaranteed $0 - not just whichever was processed first; if
+        it's over, the discount is shared proportionally to usage rather
+        than handed entirely to one node. `getFreeTierAllowance()` now
+        returns the allowance in **$** (not raw request/RCU counts) so
+        simulate.ts can compare it directly against accumulated breakdown
+        totals without needing to know any service's own pricing constants.
+      - **Second round of feedback**: free-tier savings were only visible as
+        one disconnected total at the top of the widget - looking at any
+        individual row in the cost breakdown table, there was no way to
+        tell whether that $ figure already accounted for free tier, or why
+        a near-identical node might show a different number. Fixed: each
+        row's `$/period` cell now shows a small note directly underneath -
+        `"free tier"` when a node is fully covered, `"−$X.XX free tier"`
+        when partially covered, nothing when free tier doesn't apply - so
+        the number is self-explanatory without cross-referencing the total.
+      - 18 Vitest tests covering free tier (per-service `getFreeTierAllowance`
+        math for SQS/Lambda/DynamoDB including the new `SQS.test.ts`, plus
+        `simulate.ts` integration tests proving the pool is genuinely shared
+        across nodes rather than per-node, that Lambda's resets at the
+        30-day boundary rather than staying permanently drained, that
+        DynamoDB's discount is flat every day of a 60-day period rather than
+        depleting, and - the specific bug reported - that two nodes with
+        equal usage over a shared pool end up with equal, nonzero cost and
+        equal, nonzero savings rather than one at $0 and one paying for all
+        of it).
       - Verified end-to-end against the rightsizing test deployment: at
-        realistic (10 req/s flat) traffic, catalog-table (5 RCU/2 WCU
-        provisioned - both under the 25/25 free threshold) correctly costs
-        $0.00 despite still being flagged `critical`/over its own capacity
-        (160% utilization) - provisioned-but-insufficient capacity is still
-        free if it's under the threshold, a genuine and correct interaction
-        between the rightsizing and free-tier engines that composes
-        correctly with zero special-casing. UI: a green "Includes $X.XX
-        saved via AWS's always-free tier" line under the total cost,
-        visible only when savings are actually nonzero.
+        realistic (10 req/s flat) traffic, both Lambda nodes now show their
+        own proportional, nonzero savings (previously only the
+        first-processed one showed any), catalog-table (5 RCU/2 WCU
+        provisioned, both under the 25/25 free threshold) correctly shows
+        `$0.00` / `free tier` despite still being flagged `critical` for
+        being under-provisioned, and every row's $ figure is now
+        self-explanatory at a glance.
 - [x] Capacity simulator: `src/Simulation/trafficPropagation.ts` propagates a
       single rps value through the graph using each edge's already-resolved
       `callerID`/`receiverID` (so pull-edge direction is handled automatically
