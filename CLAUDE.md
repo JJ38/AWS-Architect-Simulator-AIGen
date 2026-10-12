@@ -118,17 +118,37 @@ directly in components:
   `TrafficProfile` — one `{label, rps}` point per day, not a single number —
   with Flat/Ramp/Weekly-cycle/Holiday-spike generators.
   `trafficPropagation.ts` propagates one rps value through the diagram using
-  each edge's already-resolved `callerID`/`receiverID` (so pull vs. push
-  direction is handled automatically); `simulate.ts` calls this once per
-  traffic-profile point (so once per day) and sums each node's
-  `Resource.estimateCost()` into a period total, tracking both average and
-  peak workload per node. Capacity-adequacy warnings (is this node big enough
-  for its *peak* traffic) are a separate optional
+  each edge's already-resolved `callerID`/`receiverID` - for push (sync/
+  async) edges traffic flows caller→receiver, but for pull edges the
+  *propagation* direction is receiver→caller (the receiver, e.g. a queue, is
+  what accumulates traffic; the caller/puller drains it rather than
+  originating it) even though `callerID`/`receiverID` keep their normal
+  cost-attribution meaning everywhere else. Getting this backwards
+  double-counts a pull consumer's traffic as a second entry point - there's
+  a regression test for exactly this shape (producer → queue → puller).
+  `simulate.ts` calls `propagateTraffic` once per traffic-profile point (so
+  once per day) and sums each node's `Resource.estimateCost()` into a period
+  total, tracking both average and peak workload per node.
+  Capacity-adequacy warnings (is this node big enough for its *peak*
+  traffic) are a separate optional
   `Resource.checkCapacityWarnings(peakWorkloadRps)` hook, checked once after
   the day loop rather than per-day, so a resource that's fine most of the
   period and only overloaded on the peak day gets one clear warning instead of
-  near-duplicates. See `todo.md`'s Simulation section for the specific
-  simplifying assumptions this v1 makes.
+  near-duplicates. See `todo.md`'s Simulation and Capacity sim sections for
+  the specific simplifying assumptions and what's still ahead (rightsizing
+  recommendations, instance-size-aware thresholds).
+- **`src/exampleDeployments/`** holds bundled test/demo architectures, built
+  with the real `Resource.create()` factories rather than hand-rolled JSON
+  (so they can't drift from the actual data shape) and loaded directly via a
+  sidebar button (`SidebarController.handleLoadExampleClick`) - no save/load
+  round trip. `rightsizingTestDeployment.ts` is the first one; see `todo.md`'s
+  Capacity sim section for what it's testing and why.
+- **`src/sharedConstants.ts`** holds the handful of constants (`regions`,
+  `effect`) that both `constants.ts` (which imports every `Resource`
+  subclass) and `Models/IamFactory.ts` (imported *by* several of those
+  subclasses) need - keeping them in a dependency-free leaf file avoids a
+  circular import between the two. Add new cross-cutting constants here, not
+  to `constants.ts`, if anything under `Models/` needs them.
 
 **CSS convention**: one `.css` file per component under `src/styles/`, imported
 directly in the matching `.tsx` file (e.g. `import '../styles/Sidebar.css'`).

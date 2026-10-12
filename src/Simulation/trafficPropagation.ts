@@ -1,4 +1,4 @@
-import type { AppEdge, AppNode } from "../types";
+import type { AppEdge, AppNode, EdgeType } from "../types";
 
 export interface TrafficPropagationResult{
 
@@ -14,7 +14,10 @@ export interface TrafficPropagationResult{
 // no fan-out multipliers, batching, or caching yet). callerID/receiverID
 // (already resolved by CanvasController.onConnect, independent of edge
 // drawing direction - a "pull" edge's caller is the thing doing the pulling)
-// gives us "who calls whom" directly, so traffic flows caller -> receiver.
+// gives "who calls whom", and traffic flows caller -> receiver for push
+// (sync/async) edges - but receiver -> caller for pull edges, since a pull
+// receiver (e.g. a queue) is the thing accumulating traffic, and the caller
+// (the puller) drains it rather than originating it. See the edge loop below.
 export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: number): TrafficPropagationResult{
 
     const warnings: string[] = [];
@@ -22,7 +25,9 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
     const nodeIds = nodes.map((node) => node.id);
 
-    const outgoingEdgesByCaller = new Map<string, string[]>();
+    // Built from callerID/receiverID (cost-attribution roles), but NOT the
+    // same graph for every edge type - see the pull-edge handling below.
+    const outgoingPropagationEdges = new Map<string, string[]>();
     const incomingEdgeCount = new Map<string, number>();
 
     nodeIds.forEach((id) => incomingEdgeCount.set(id, 0));
@@ -31,21 +36,36 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
 
         const callerID = edge.data?.resources?.callerID;
         const receiverID = edge.data?.resources?.receiverID;
+        const edgeType: EdgeType | undefined = edge.data?.componentProperties?.behaviour?.edgeType?.value;
 
         if(callerID == undefined || receiverID == undefined){
             continue;
         }
 
-        const existing = outgoingEdgesByCaller.get(callerID) ?? [];
-        existing.push(receiverID);
-        outgoingEdgesByCaller.set(callerID, existing);
+        // Push edges (sync/async): the caller generates traffic that flows
+        // to the receiver - propagation direction matches the cost roles.
+        // Pull edges are the other way round for propagation purposes: the
+        // receiver (e.g. a queue) accumulates traffic pushed into it by ITS
+        // OWN upstream edges, and the caller (the puller, e.g. a consumer
+        // Lambda) drains that backlog - so the puller's workload is derived
+        // from the receiver's resolved rate, not an independent source.
+        // Getting this wrong double-counts traffic and also makes a pull
+        // consumer look like a second, unrelated entry point (it has no
+        // incoming edge under the caller->receiver graph, since it's always
+        // the "caller" in its own edge).
+        const propagationSource = edgeType === "pull" ? receiverID : callerID;
+        const propagationTarget = edgeType === "pull" ? callerID : receiverID;
 
-        incomingEdgeCount.set(receiverID, (incomingEdgeCount.get(receiverID) ?? 0) + 1);
+        const existing = outgoingPropagationEdges.get(propagationSource) ?? [];
+        existing.push(propagationTarget);
+        outgoingPropagationEdges.set(propagationSource, existing);
+
+        incomingEdgeCount.set(propagationTarget, (incomingEdgeCount.get(propagationTarget) ?? 0) + 1);
 
     }
 
     const hasIncoming = (id: string): boolean => (incomingEdgeCount.get(id) ?? 0) > 0;
-    const hasOutgoing = (id: string): boolean => (outgoingEdgesByCaller.get(id)?.length ?? 0) > 0;
+    const hasOutgoing = (id: string): boolean => (outgoingPropagationEdges.get(id)?.length ?? 0) > 0;
 
     // A node only originates traffic if it's actually wired into the rest of
     // the diagram as a front door: no incoming edges (nothing upstream of it
@@ -109,17 +129,17 @@ export function propagateTraffic(nodes: AppNode[], edges: AppEdge[], entryRps: n
         const nodeRate = accumulatedIncomingRate.get(nodeId) ?? 0;
         workloadRps.set(nodeId, nodeRate);
 
-        const downstream = outgoingEdgesByCaller.get(nodeId) ?? [];
+        const downstream = outgoingPropagationEdges.get(nodeId) ?? [];
 
-        for(const receiverID of downstream){
+        for(const downstreamID of downstream){
 
-            accumulatedIncomingRate.set(receiverID, (accumulatedIncomingRate.get(receiverID) ?? 0) + nodeRate);
+            accumulatedIncomingRate.set(downstreamID, (accumulatedIncomingRate.get(downstreamID) ?? 0) + nodeRate);
 
-            const remaining = (remainingInDegree.get(receiverID) ?? 0) - 1;
-            remainingInDegree.set(receiverID, remaining);
+            const remaining = (remainingInDegree.get(downstreamID) ?? 0) - 1;
+            remainingInDegree.set(downstreamID, remaining);
 
             if(remaining <= 0){
-                queue.push(receiverID);
+                queue.push(downstreamID);
             }
 
         }

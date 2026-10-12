@@ -261,6 +261,92 @@ Keep the simulation engine as plain framework-free TS functions (graph +
 traffic in, metrics out) — see `src/Simulation/` — testable, and keeps sim
 logic out of components.
 
+## Track 1 — App: Capacity sim / rightsizing (in progress)
+
+Goal (user's framing): rightsize services based on predicted traffic over
+time, and highlight bottlenecks — e.g. if an EC2 instance isn't behind an
+auto scaling group and traffic exceeds what it can handle, requests should
+start failing, and that should be flagged to the user. Today's capacity
+warnings (`Resource.checkCapacityWarnings`) are a first cut at the "flag it"
+half — crude fixed thresholds (EC2: peak > 200 req/s; DynamoDB provisioned:
+peak vs RCU/WCU), not yet "requests start failing" or anything that scales
+with the *actual* chosen instance size. Rightsizing (recommend a size, don't
+just warn) hasn't started.
+
+- [x] **Step 1 (this session): a comprehensive test deployment**, built
+      specifically to validate bottleneck/rightsizing detection against,
+      rather than inventing scenarios ad hoc. `src/exampleDeployments/
+      rightsizingTestDeployment.ts` — an "online shop" architecture, built
+      with the real `Resource.create()` factories (not hand-rolled JSON) so
+      it can't drift from the actual node/edge data shape. Load it via the
+      new sidebar flask-icon button ("Load example") — `SidebarController
+      .handleLoadExampleClick()` calls `setNodes`/`setEdges` directly, no
+      save/load-widget round trip needed.
+      - **Two deliberately under-provisioned nodes** on one path:
+        `catalog-web` (EC2, `t3.micro`, wired straight to the entry point
+        with no ASG - "no ASG" is represented just by that direct wiring,
+        since ASGs aren't modelled as a separate service yet) and
+        `catalog-table` (DynamoDB, `PROVISIONED` with 5 RCU / 2 WCU, sized
+        for a quiet month) immediately downstream of it - a deliberately
+        realistic *compounding* bottleneck pair, not a contrived one.
+      - **A fully-serverless control-group path** (`checkout-fn` Lambda →
+        `order-queue` SQS → `fulfillment-fn` Lambda, pull-based) that should
+        show zero capacity warnings at any traffic level — proves the
+        detector flags the right things, not everything.
+      - 8 nodes, 7 edges, all 6 services represented, S3 used in two
+        different roles (`order-receipts` write-heavy, `product-images`
+        read-heavy via `read_traffic_percent`).
+      - To stress-test: load the example, open the traffic puck, pick
+        "Holiday spike", then drag the day-24 peak point up well past the
+        default 60 req/s (e.g. ~300) — the default Holiday-spike peak alone
+        isn't high enough to trip the current crude 200 req/s EC2 threshold.
+      - Verified end-to-end in-browser via Playwright at a 300 req/s peak:
+        `catalog-web` and `catalog-table` both correctly show their capacity
+        warning (⚠ badge in the Capacity canvas view, warning text in the
+        cost breakdown table); every other node shows none.
+- [x] **Bug found and fixed while validating the deployment above: pull-edge
+      consumers were double-counted as a second, independent traffic entry
+      point.** `trafficPropagation.ts` built its propagation graph straight
+      from `callerID`/`receiverID` for every edge type - correct for
+      sync/async (caller originates, receiver receives), but backwards for
+      pull: a pull edge's caller (e.g. `fulfillment-fn` pulling from
+      `order-queue`) never appears as anyone's "receiver" in that graph, so
+      it had zero incoming edges and qualified as its own independent entry
+      point, receiving a *second* full `entryRps` on top of what actually
+      flowed to the queue it was pulling from. Fixed by flipping the
+      propagation direction specifically for pull edges (receiver → caller,
+      since the receiver - the queue - is what accumulates traffic, and the
+      puller drains it rather than originating it); `callerID`/`receiverID`
+      keep their original cost-attribution meaning everywhere else. Caught
+      because the test deployment above has exactly this shape
+      (`checkout-fn` → `order-queue` → `fulfillment-fn`); added a regression
+      test (`trafficPropagation.test.ts`, now 12 tests) using that same
+      producer/queue/puller shape so it can't silently regress again.
+- [x] **Fixed a latent circular-import bug** while wiring the example
+      deployment's loader: `constants.ts` (imports every `Resource`
+      subclass for `resourceContainer`) and `IamFactory.ts` (imported by
+      several of those subclasses, needed `effect` from `constants.ts`)
+      formed a cycle that happened to resolve safely only by luck of module
+      evaluation order - until `SidebarController.ts` importing the new
+      deployment file (which imports both a service class directly *and*
+      `constants.ts`) changed that order enough to turn it into a real
+      `ReferenceError: Cannot access 'EC2' before initialization` crash on
+      page load. Fixed by extracting the two constants `IamFactory.ts`
+      actually needs (`regions`, `effect`) into a new dependency-free
+      `src/sharedConstants.ts`; `constants.ts` re-exports them for existing
+      consumers.
+- [ ] **Next**: the actual rightsizing/bottleneck-detection work the above
+      was built to validate - not started yet. At minimum: make the EC2
+      capacity threshold a function of the chosen `instance_type` (not a
+      flat 200 req/s regardless of size), and figure out what "requests
+      start failing" should mean quantitatively (a hard cutoff? a
+      graceful-degradation curve? surfaced as a failure *rate* rather than a
+      boolean warning?) before building it, rather than guessing.
+- [ ] Bottleneck highlighting lives only in the cost widget's text and the
+      Capacity canvas view's badges right now - no on-canvas color/pulse
+      treatment for "this node is overloaded" specifically (as opposed to
+      the generic debug badge).
+
 ## Track 1 — App: Visual design ("Blueprint" theme + light/dark)
 
 - [x] Deliberate design pass (per explicit feedback that the UI "looks a bit"

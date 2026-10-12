@@ -1,4 +1,4 @@
-import { effect } from "../constants";
+import { effect } from "../sharedConstants";
 import type { Property } from "../types";
 
 

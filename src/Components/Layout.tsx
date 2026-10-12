@@ -47,6 +47,8 @@ export default function Layout() {
                         setShowLoadWidget={setShowLoadWidget}
                         setShowSaveWidget={setShowSaveWidget}
                         setShowTerraformWidget={setShowTerraformWidget}
+                        setNodes={setNodes}
+                        setEdges={setEdges}
                     />
                     <ReactFlowProvider>
                         <Canvas

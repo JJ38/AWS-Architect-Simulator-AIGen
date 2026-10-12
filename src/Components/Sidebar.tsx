@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import type { Service } from '../types.ts';
+import type { AppEdge, AppNode, Service } from '../types.ts';
 import { SidebarController } from '../Controllers/SidebarController.ts';
 import { services } from '../constants.ts';
 import SidebarButton from './Buttons/ServiceButton.tsx';
+import { useNotification } from '../Providers/NotificationProvider.tsx';
 import '../styles/Sidebar.css';
 
 
@@ -12,7 +13,9 @@ export default function Sidebar(
         setSelectedService,
         setShowLoadWidget,
         setShowSaveWidget,
-        setShowTerraformWidget
+        setShowTerraformWidget,
+        setNodes,
+        setEdges
     }
         :
     {
@@ -21,10 +24,13 @@ export default function Sidebar(
         setShowLoadWidget: React.Dispatch<React.SetStateAction<boolean>>;
         setShowSaveWidget: React.Dispatch<React.SetStateAction<boolean>>;
         setShowTerraformWidget: React.Dispatch<React.SetStateAction<boolean>>;
+        setNodes: React.Dispatch<React.SetStateAction<AppNode[]>>;
+        setEdges: React.Dispatch<React.SetStateAction<AppEdge[]>>;
     }
 ){
 
-    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget));
+    const showNotification = useNotification();
+    const [stateSidebarController] = useState(() => new SidebarController(setShowLoadWidget, setShowSaveWidget, stateSelectedService, setSelectedService, setShowTerraformWidget, setNodes, setEdges, showNotification));
 
 
     return  <div className="sidebar">
@@ -55,6 +61,15 @@ export default function Sidebar(
                         key={"Terraform"}
                         isSelected={false}
                         onClick={() => stateSidebarController.handleTerraformClick()}
+                    />
+
+                    <SidebarButton
+                        serviceName={"Load example"}
+                        serviceDescription={"Load the rightsizing test deployment"}
+                        serviceImg={"example_icon.svg"}
+                        key={"LoadExample"}
+                        isSelected={false}
+                        onClick={() => stateSidebarController.handleLoadExampleClick()}
                     />
 
                     <SidebarButton

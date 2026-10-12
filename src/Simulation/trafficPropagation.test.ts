@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { propagateTraffic } from "./trafficPropagation";
-import type { AppEdge, AppNode } from "../types";
+import type { AppEdge, AppNode, EdgeType } from "../types";
 
 function makeNode(id: string): AppNode{
     return { id, position: { x: 0, y: 0 }, data: {} } as unknown as AppNode;
 }
 
-function makeEdge(callerID: string, receiverID: string): AppEdge{
+function makeEdge(callerID: string, receiverID: string, edgeType?: EdgeType): AppEdge{
     return {
         id: `${callerID}->${receiverID}`,
         source: callerID,
         target: receiverID,
-        data: { resources: { callerID, receiverID } }
+        data: {
+            resources: { callerID, receiverID },
+            componentProperties: edgeType == null ? undefined : { behaviour: { edgeType: { value: edgeType, type: "edgeType" } } }
+        }
     } as unknown as AppEdge;
 }
 
@@ -143,6 +146,31 @@ describe("propagateTraffic", () => {
         const { workloadRps } = propagateTraffic(nodes, edges, 30);
 
         expect(workloadRps.get("table")).toBe(30);
+
+    });
+
+    // Regression: a pull edge's caller (the puller/consumer) was being
+    // treated as an independent traffic entry point, since it never appears
+    // as a "receiver" in the caller/receiver graph (it's always the caller
+    // in its own pull edge). That double-counted traffic at the thing being
+    // pulled from and made a queue consumer's workload wrong. The real
+    // deployment that first exposed this: checkout-fn pushes (async) into a
+    // queue, fulfillment-fn pulls from the same queue - fulfillment-fn's
+    // correct workload is whatever reaches the queue, not a second
+    // independent 1x entryRps on top of it.
+    it("derives a pull consumer's workload from what reaches the thing it pulls from, not as a second entry point", () => {
+
+        const nodes = [makeNode("producer"), makeNode("queue"), makeNode("consumer")];
+        const edges = [
+            makeEdge("producer", "queue", "async"),
+            makeEdge("consumer", "queue", "pull"), // consumer pulls from queue
+        ];
+
+        const { workloadRps, warnings } = propagateTraffic(nodes, edges, 50);
+
+        expect(workloadRps.get("queue")).toBe(50);
+        expect(workloadRps.get("consumer")).toBe(50);
+        expect(warnings.length).toBe(0); // exactly one real entry point (producer)
 
     });
 
