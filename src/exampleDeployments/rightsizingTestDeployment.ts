@@ -21,14 +21,22 @@ import type { AppEdge, AppNode, EdgeType, ResourceData } from "../types";
  *                   /          \                 no ASG - BOTTLENECK #1)
  *       order-queue (SQS)   order-receipts (S3)   /              \
  *              |                        catalog-table         product-images
- *     fulfillment-fn (Lambda)         (DynamoDB, 5 RCU/2 WCU   (S3)
- *                                      - BOTTLENECK #2)
+ *     fulfillment-fn (Lambda,        (DynamoDB, 5 RCU/2 WCU   (S3)
+ *      reserved concurrency 20        - BOTTLENECK #2)
+ *      - BOTTLENECK #3)
  *
- * Two deliberately under-provisioned nodes (catalog-web, catalog-table) sit
- * on one path; the other path (checkout-fn -> order-queue -> fulfillment-fn)
- * is entirely serverless and should show no capacity warnings regardless of
- * traffic - a control group to prove the detector isn't just flagging
- * everything.
+ * Three deliberately under-provisioned nodes, three different *kinds* of
+ * capacity limit: catalog-web (an illustrative instance-throughput estimate),
+ * catalog-table (a real but separate AWS limit, RCU/WCU), fulfillment-fn (a
+ * real, precisely-modelled AWS limit - exceeding reserved concurrency is a
+ * genuine 429 TooManyRequestsException, not an estimate). All three are
+ * sized for a quiet month's baseline traffic, not a spike - fine most of the
+ * period, over capacity only once the peak hits.
+ *
+ * checkout-fn (no reservation, draws from the shared account pool) and
+ * shop-api/order-queue/both S3 buckets are the control group: should show
+ * not_applicable / no capacity warning at any traffic level, proving the
+ * detector flags the right things and not everything.
  */
 
 interface NodePosition{ x: number, y: number }
@@ -152,12 +160,16 @@ export function createRightsizingTestDeployment(): { nodes: AppNode[], edges: Ap
             data.componentProperties.simulation.estimated_storage_gb.value = 40;
         }),
 
-        // The control group: fully serverless, nothing here should ever
-        // show a capacity warning no matter how high the traffic goes.
+        // BOTTLENECK #3: a reserved concurrency limit set for cost control
+        // (a very real, common practice) but sized for the quiet-month
+        // baseline, not the spike - 20 concurrent executions covers ~8 req/s
+        // at this function's 400ms average duration comfortably, but falls
+        // well short of the ~120 needed at a 300 req/s peak.
         makeNode(fulfillmentId, Lambda, "Lambda", { x: 100, y: 680 }, (data) => {
             data.terraformProperties.aws_lambda_function.function_name.value = "fulfillment-fn";
             data.terraformProperties.aws_lambda_function.memory_size.value = 512;
             data.terraformProperties.aws_lambda_function.timeout.value = 30;
+            data.terraformProperties.aws_lambda_function.reserved_concurrent_executions.value = 20;
             data.componentProperties.simulation.estimated_avg_duration_ms.value = 400;
         }),
 

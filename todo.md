@@ -280,16 +280,18 @@ today (a status + recommendation, not a modeled failure rate).
       new sidebar flask-icon button ("Load example") — `SidebarController
       .handleLoadExampleClick()` calls `setNodes`/`setEdges` directly, no
       save/load-widget round trip needed.
-      - **Two deliberately under-provisioned nodes** on one path:
-        `catalog-web` (EC2, `t3.micro`, wired straight to the entry point
-        with no ASG - "no ASG" is represented just by that direct wiring,
-        since ASGs aren't modelled as a separate service yet) and
-        `catalog-table` (DynamoDB, `PROVISIONED` with 5 RCU / 2 WCU, sized
-        for a quiet month) immediately downstream of it - a deliberately
-        realistic *compounding* bottleneck pair, not a contrived one.
-      - **A fully-serverless control-group path** (`checkout-fn` Lambda →
-        `order-queue` SQS → `fulfillment-fn` Lambda, pull-based) that should
-        show zero capacity warnings at any traffic level — proves the
+      - **Three deliberately under-provisioned nodes**, each sized for a
+        quiet month rather than a spike: `catalog-web` (EC2 `t3.micro`,
+        wired straight to the entry point with no ASG - "no ASG" is
+        represented just by that direct wiring, since ASGs aren't modelled
+        as a separate service yet), `catalog-table` (DynamoDB `PROVISIONED`
+        at 5 RCU / 2 WCU, immediately downstream of catalog-web - a
+        deliberately realistic *compounding* pair, not contrived), and
+        `fulfillment-fn` (Lambda, `reserved_concurrent_executions = 20`,
+        added once Lambda rightsizing shipped - see the Step 3 entry below).
+      - **A control group** (`checkout-fn` Lambda with no reservation,
+        `order-queue` SQS, both S3 buckets, `shop-api`) that should show
+        `not_applicable`/no warning at any traffic level — proves the
         detector flags the right things, not everything.
       - 8 nodes, 7 edges, all 6 services represented, S3 used in two
         different roles (`order-receipts` write-heavy, `product-images`
@@ -297,11 +299,10 @@ today (a status + recommendation, not a modeled failure rate).
       - To stress-test: load the example, open the traffic puck, pick
         "Holiday spike", then drag the day-24 peak point up well past the
         default 60 req/s (e.g. ~300) — the default Holiday-spike peak alone
-        isn't high enough to trip the current crude 200 req/s EC2 threshold.
+        isn't high enough to trip any of the three bottlenecks.
       - Verified end-to-end in-browser via Playwright at a 300 req/s peak:
-        `catalog-web` and `catalog-table` both correctly show their capacity
-        warning (⚠ badge in the Capacity canvas view, warning text in the
-        cost breakdown table); every other node shows none.
+        all three sized nodes correctly flagged critical with distinct
+        recommendations, every control-group node correctly `not_applicable`.
 - [x] **Bug found and fixed while validating the deployment above: pull-edge
       consumers were double-counted as a second, independent traffic entry
       point.** `trafficPropagation.ts` built its propagation graph straight
@@ -409,6 +410,39 @@ today (a status + recommendation, not a modeled failure rate).
       green/amber/red border+text for ok/warning/critical, a muted italic
       "auto-scales" tag for not_applicable (serverless) nodes, full message
       + recommendation on hover via the native `title` tooltip.
+- [x] **Step 3: Lambda reserved-concurrency rightsizing** - a third
+      capacity-capable service, and notably the most *precisely* correct one
+      of the three: EC2's throughput table is an illustrative estimate and
+      DynamoDB's RCU/WCU is a real but separate limit, but Lambda
+      concurrency is the actual mechanism AWS throttles on - exceeding
+      `reserved_concurrent_executions` is a genuine `429
+      TooManyRequestsException`, not an estimate. Uses Little's Law
+      (`concurrency ≈ requests/sec × average duration`) against
+      `estimated_avg_duration_ms` to find required concurrency per day. A
+      function with **no** reservation is `not_applicable` - it draws from
+      the shared account-wide pool (default 1000, shared across every
+      function in the account/region), and modelling that shared pool
+      across multiple nodes is out of scope, so an unreserved function isn't
+      guessed at rather than measured against the wrong limit.
+      - Added to the rightsizing test deployment: `fulfillment-fn` now has
+        `reserved_concurrent_executions = 20`, sized for the baseline
+        traffic (comfortable at ~8 req/s) but not the spike - a third,
+        realistic "sized for a quiet month" bottleneck, while `checkout-fn`
+        stays unreserved as the genuine not_applicable control case.
+      - 5 new Vitest tests (`Lambda.test.ts`, 27 tests total across the
+        project) covering: not_applicable with no reservation even at huge
+        traffic, adequate sizing via Little's Law, critical with a specific
+        recommended concurrency value, per-day (not whole-period)
+        exceedance, and the missing-duration default not throwing.
+      - Verified end-to-end against the (now three-bottleneck) deployment at
+        a 300 req/s stress peak: all three nodes correctly flagged critical
+        with distinct, genuinely different "blast radius" patterns that
+        validate the whole point of doing this per-day rather than
+        peak-only - EC2 over capacity 7 of 31 days, DynamoDB 31 of 31 (its
+        baseline was already too low, not just the spike), Lambda only 1 of
+        31 (only the single highest-traffic day actually exceeds 20
+        concurrent executions). Same day, same diagram, three different
+        stories - exactly what a reader needs a sanity check to tell them.
 - [ ] **Possible next step, not started**: an actual failure/latency model
       (e.g. a saturation curve past 100% utilization, or queueing delay for
       SQS/pull consumers specifically) rather than a binary
@@ -418,6 +452,13 @@ today (a status + recommendation, not a modeled failure rate).
       already in `EC2_HOURLY_USD` (~11 types) - same unrecognised-type
       fallback pattern as pricing, documented as illustrative not
       benchmarked.
+- [ ] SQS, API Gateway, and S3 are all `not_applicable` (no modelled capacity
+      ceiling) - a reasonable match for real AWS behavior at the traffic
+      levels this tool is meant for (standard SQS queues and S3 prefix
+      throughput limits are very high; API Gateway's default account
+      throttle is thousands of req/s), not an oversight, but worth
+      revisiting if this tool is ever used to simulate genuinely
+      massive-scale traffic.
 
 ## Track 1 — App: Visual design ("Blueprint" theme + light/dark)
 

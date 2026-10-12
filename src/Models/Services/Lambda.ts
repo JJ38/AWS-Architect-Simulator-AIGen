@@ -1,5 +1,5 @@
 import Resource from "../Resource";
-import type { CostEstimate, EdgeType, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CapacityAssessment, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
 import { LAMBDA_ASSUMED_AVG_DURATION_SECONDS, LAMBDA_DEFAULT_MEMORY_MB, LAMBDA_PRICE_PER_GB_SECOND_USD, LAMBDA_PRICE_PER_REQUEST_USD, requestsOverDuration } from "../../Simulation/pricing.ts";
 
@@ -135,6 +135,71 @@ export default class Lambda extends Resource{
 
     }
 
+    // Unlike EC2's instance throughput (an illustrative estimate) or
+    // DynamoDB's RCU/WCU (a real but separate limit), Lambda concurrency is
+    // the actual mechanism AWS throttles on: exceeding
+    // reserved_concurrent_executions returns a real 429
+    // TooManyRequestsException. Little's Law gives the required concurrency
+    // from throughput and duration: concurrent executions ~= requests/sec x
+    // average duration (seconds). A function with NO reservation draws from
+    // the shared account-wide pool (default 1000, account-level, shared
+    // across every function) - modelling that shared pool across multiple
+    // nodes is out of scope here, so an unreserved function is treated as
+    // not_applicable rather than guessed at.
+    assessCapacity(dailyWorkload: NodeDailyWorkload[]): CapacityAssessment{
+
+        const reservedConcurrency: number | null = this.terraformProperties?.aws_lambda_function?.reserved_concurrent_executions?.value ?? null;
+
+        if(reservedConcurrency == null){
+            return { status: "not_applicable", message: "No reserved concurrency set - draws from the shared account-wide pool, not a per-function limit to size here." };
+        }
+
+        const avgDurationMs: number = this.componentProperties?.simulation?.estimated_avg_duration_ms?.value ?? (LAMBDA_ASSUMED_AVG_DURATION_SECONDS * 1000);
+        const avgDurationSeconds = avgDurationMs / 1000;
+
+        const requiredConcurrency = (rps: number): number => rps * avgDurationSeconds;
+
+        const peak = dailyWorkload.reduce((max, day) => Math.max(max, day.rps), 0);
+        const peakRequiredConcurrency = requiredConcurrency(peak);
+        const peakUtilizationPercent = reservedConcurrency > 0
+            ? (peakRequiredConcurrency / reservedConcurrency) * 100
+            : (peakRequiredConcurrency > 0 ? 999 : 0);
+
+        const exceededDayLabels = dailyWorkload
+            .filter((day) => requiredConcurrency(day.rps) > reservedConcurrency)
+            .map((day) => day.label);
+
+        if(exceededDayLabels.length > 0){
+
+            const recommendedConcurrency = Math.ceil(peakRequiredConcurrency);
+
+            return {
+                status: "critical",
+                message: `Reserved concurrency (${reservedConcurrency}) is too low on ${exceededDayLabels.length} of ${dailyWorkload.length} day(s) - requests will be throttled (429).`,
+                recommendation: `Raise reserved_concurrent_executions to at least ${recommendedConcurrency} to cover the peak (~${peak.toFixed(1)} req/s at ~${avgDurationMs}ms average duration), or remove the reservation to use the shared account pool.`,
+                peakUtilizationPercent,
+                exceededDayLabels
+            };
+
+        }
+
+        if(peakUtilizationPercent >= 80){
+            return {
+                status: "warning",
+                message: `Peak traffic needs ~${peakUtilizationPercent.toFixed(0)}% of reserved concurrency - little headroom.`,
+                recommendation: "Consider raising reserved_concurrent_executions before the next traffic increase.",
+                peakUtilizationPercent
+            };
+        }
+
+        return {
+            status: "ok",
+            message: `Peak traffic needs ~${peakUtilizationPercent.toFixed(0)}% of reserved concurrency.`,
+            peakUtilizationPercent
+        };
+
+    }
+
     public validate(): ValidationResult {
 
         let valid = true;
@@ -143,7 +208,7 @@ export default class Lambda extends Resource{
         const validationResult = {
             id: "",
             nodeType: "",
-            valid: valid, 
+            valid: valid,
             errors: errors
         };
 

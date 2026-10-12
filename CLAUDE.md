@@ -140,12 +140,17 @@ directly in components:
   days and only overloaded on the one spike day is a materially different
   situation from one that's undersized year-round, even with an identical
   peak, and `CapacityAssessment.exceededDayLabels` is what lets a reader
-  (and the UI) tell those apart instead of collapsing to one boolean. EC2
-  and DynamoDB (provisioned mode) are the two resources with a real sizing
-  dimension today - see `todo.md`'s Capacity sim section for exactly what
-  each does, the per-instance-type throughput table, and what's explicitly
-  out of scope (this produces a status + recommendation, not a modeled
-  failure rate or latency curve).
+  (and the UI) tell those apart instead of collapsing to one boolean. EC2,
+  DynamoDB (provisioned mode), and Lambda (when `reserved_concurrent_executions`
+  is set) are the three resources with a real sizing dimension today -
+  notably not all estimated the same way: EC2's per-instance throughput is
+  an illustrative guess, DynamoDB's RCU/WCU is a real but separate AWS
+  limit, and Lambda's concurrency check (Little's Law: concurrency ≈
+  requests/sec × average duration) is the most precisely correct of the
+  three - exceeding reserved concurrency is a genuine AWS 429, not an
+  estimate. See `todo.md`'s Capacity sim section for what each does and
+  what's explicitly out of scope (this produces a status + recommendation,
+  not a modeled failure rate or latency curve).
 - **`src/exampleDeployments/`** holds bundled test/demo architectures, built
   with the real `Resource.create()` factories rather than hand-rolled JSON
   (so they can't drift from the actual data shape) and loaded directly via a
