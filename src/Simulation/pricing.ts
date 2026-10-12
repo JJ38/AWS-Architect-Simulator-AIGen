@@ -41,6 +41,29 @@ export const EC2_HOURLY_USD: Record<string, number> = {
 
 export const EC2_DEFAULT_HOURLY_USD = 0.05; // fallback for an unrecognised/unset instance_type
 
+// Illustrative max sustained requests/sec for ONE instance of a given type,
+// for a "typical" small web/API workload - loosely scaled with vCPU count,
+// not derived from any benchmark. This is the whole point of a rightsizing
+// *sanity check*: it doesn't know what the instance actually does per
+// request, so treat this as "is this roughly the right size class", not a
+// load-test result. c5 (compute-optimized) gets a higher multiplier than
+// t3/m5 for the same rough size, reflecting its actual positioning.
+export const EC2_ESTIMATED_MAX_RPS: Record<string, number> = {
+    "t3.nano": 10,
+    "t3.micro": 20,
+    "t3.small": 40,
+    "t3.medium": 80,
+    "t3.large": 160,
+    "t3.xlarge": 320,
+    "m5.large": 200,
+    "m5.xlarge": 400,
+    "m5.2xlarge": 800,
+    "c5.large": 250,
+    "c5.xlarge": 500,
+};
+
+export const EC2_DEFAULT_MAX_RPS = 20; // fallback for an unrecognised/unset instance_type - same tier as t3.micro
+
 // Lambda, $/request and $/GB-second
 export const LAMBDA_PRICE_PER_REQUEST_USD = 0.0000002;
 export const LAMBDA_PRICE_PER_GB_SECOND_USD = 0.0000166667;

@@ -1,4 +1,4 @@
-import type { AppEdge, AppNode } from "../types";
+import type { AppEdge, AppNode, CapacityAssessment, NodeDailyWorkload } from "../types";
 import type { ResourceStatics } from "../Models/Resource";
 import { resourceContainer } from "../constants";
 import { propagateTraffic } from "./trafficPropagation";
@@ -14,7 +14,8 @@ export interface NodeSimulationResult{
     peakLabel: string,
     costUSD: number,
     breakdown: Record<string, number>,
-    warnings: string[]
+    warnings: string[],
+    capacity: CapacityAssessment
 
 }
 
@@ -34,7 +35,8 @@ interface NodeAccumulator{
     peakLabel: string,
     costUSD: number,
     breakdown: Record<string, number>,
-    dayWarnings: Set<string>
+    dayWarnings: Set<string>,
+    dailyWorkload: NodeDailyWorkload[]
 
 }
 
@@ -47,11 +49,12 @@ function addToBreakdown(target: Record<string, number>, source: Record<string, n
 }
 
 // Pure function: diagram + a traffic profile (one rps value per day) in,
-// cost/capacity metrics out. No React, no component state - kept
+// cost/capacity/rightsizing metrics out. No React, no component state - kept
 // framework-free so it stays easy to test and to reuse. Runs the traffic
 // propagation + per-node cost estimate once per profile point and sums the
 // results - this is what lets a Christmas-week spike cost more than a flat
-// profile with the same average rps.
+// profile with the same average rps, and lets rightsizing see which specific
+// days a resource is overloaded on rather than just its single peak number.
 export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile: TrafficProfile): SimulationResult{
 
     const globalWarnings = new Set<string>();
@@ -63,7 +66,8 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
         peakLabel: trafficProfile.points[0]?.label ?? "",
         costUSD: 0,
         breakdown: {},
-        dayWarnings: new Set<string>()
+        dayWarnings: new Set<string>(),
+        dailyWorkload: []
     }));
 
     for(const point of trafficProfile.points){
@@ -86,6 +90,7 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
             accumulator.costUSD += dayCost.costUSD;
             addToBreakdown(accumulator.breakdown, dayCost.breakdown);
             dayCost.warnings.forEach((warning) => accumulator.dayWarnings.add(warning));
+            accumulator.dailyWorkload.push({ label: point.label, rps: nodeWorkloadRps });
 
             if(nodeWorkloadRps > accumulator.peakRps){
                 accumulator.peakRps = nodeWorkloadRps;
@@ -105,8 +110,7 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
         const resource: ResourceStatics = resourceContainer[serviceName!];
         const resourceInstance = new resource(node.data);
 
-        const capacityWarnings = resourceInstance.checkCapacityWarnings(accumulator.peakRps);
-        capacityWarnings.forEach((warning) => accumulator.dayWarnings.add(warning));
+        const capacity = resourceInstance.assessCapacity(accumulator.dailyWorkload);
 
         return {
             nodeId: node.id,
@@ -116,7 +120,8 @@ export function runSimulation(nodes: AppNode[], edges: AppEdge[], trafficProfile
             peakLabel: accumulator.peakLabel,
             costUSD: accumulator.costUSD,
             breakdown: accumulator.breakdown,
-            warnings: Array.from(accumulator.dayWarnings)
+            warnings: Array.from(accumulator.dayWarnings),
+            capacity
         };
 
     });

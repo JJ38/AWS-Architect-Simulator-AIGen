@@ -261,17 +261,15 @@ Keep the simulation engine as plain framework-free TS functions (graph +
 traffic in, metrics out) — see `src/Simulation/` — testable, and keeps sim
 logic out of components.
 
-## Track 1 — App: Capacity sim / rightsizing (in progress)
+## Track 1 — App: Capacity sim / rightsizing
 
 Goal (user's framing): rightsize services based on predicted traffic over
 time, and highlight bottlenecks — e.g. if an EC2 instance isn't behind an
-auto scaling group and traffic exceeds what it can handle, requests should
-start failing, and that should be flagged to the user. Today's capacity
-warnings (`Resource.checkCapacityWarnings`) are a first cut at the "flag it"
-half — crude fixed thresholds (EC2: peak > 200 req/s; DynamoDB provisioned:
-peak vs RCU/WCU), not yet "requests start failing" or anything that scales
-with the *actual* chosen instance size. Rightsizing (recommend a size, don't
-just warn) hasn't started.
+auto scaling group and traffic exceeds what it can handle, that should be
+flagged to the user, working on timeseries data (not a single peak number),
+staying a ballpark sanity check rather than a precise simulation. See the
+"Honest scope note" a few bullets down for exactly what "flagged" means
+today (a status + recommendation, not a modeled failure rate).
 
 - [x] **Step 1 (this session): a comprehensive test deployment**, built
       specifically to validate bottleneck/rightsizing detection against,
@@ -335,17 +333,91 @@ just warn) hasn't started.
       actually needs (`regions`, `effect`) into a new dependency-free
       `src/sharedConstants.ts`; `constants.ts` re-exports them for existing
       consumers.
-- [ ] **Next**: the actual rightsizing/bottleneck-detection work the above
-      was built to validate - not started yet. At minimum: make the EC2
-      capacity threshold a function of the chosen `instance_type` (not a
-      flat 200 req/s regardless of size), and figure out what "requests
-      start failing" should mean quantitatively (a hard cutoff? a
-      graceful-degradation curve? surfaced as a failure *rate* rather than a
-      boolean warning?) before building it, rather than guessing.
-- [ ] Bottleneck highlighting lives only in the cost widget's text and the
-      Capacity canvas view's badges right now - no on-canvas color/pulse
-      treatment for "this node is overloaded" specifically (as opposed to
-      the generic debug badge).
+- [x] **Step 2: the rightsizing engine itself**, replacing the crude flat
+      threshold with per-service, timeseries-aware sizing logic. The
+      `Resource.checkCapacityWarnings(peakWorkloadRps: number): string[]`
+      hook (peak-only, returned plain strings) was replaced wholesale with
+      `Resource.assessCapacity(dailyWorkload: NodeDailyWorkload[]):
+      CapacityAssessment` — the full per-day series for the period, not just
+      its peak, and a structured result (`src/types.ts`):
+      `{ status: "ok"|"warning"|"critical"|"not_applicable", message,
+      recommendation?, peakUtilizationPercent?, exceededDayLabels? }`.
+      `simulate.ts` now accumulates each node's full `dailyWorkload` during
+      the day loop (it already had the per-day numbers for cost purposes;
+      this just keeps them instead of discarding after computing the peak)
+      and calls `assessCapacity` once per node after the loop.
+      - **EC2**: added an illustrative per-instance-type throughput table
+        (`EC2_ESTIMATED_MAX_RPS` in `pricing.ts`, loosely scaled by vCPU
+        class — explicitly *not* a benchmark, a sanity-check number) and a
+        new simulation-only `instance_count` property (same
+        `componentProperties.simulation` pattern as S3/Lambda/DynamoDB) —
+        since this app doesn't model an auto scaling group as its own
+        resource, fleet size is represented directly on the EC2 node itself;
+        `instance_count: 1` *is* "no ASG". Fleet capacity = per-instance RPS
+        × `instance_count`; cost scales by the same factor. Recommendation
+        text explicitly calls out "no ASG" when `instance_count` is 1 and
+        gives a concrete `ceil(peakRps / perInstanceRps)` instance count.
+      - **DynamoDB**: on-demand is `not_applicable` (scales automatically,
+        correctly nothing to recommend); provisioned mode finds every day
+        whose required RCU/WCU (from that day's resolved traffic × the
+        read/write split) exceeds what's configured — not just the peak day
+        — and recommends the specific RCU/WCU the actual peak needs.
+      - **Status thresholds**: `critical` = over capacity on ≥1 day,
+        `warning` = peak utilization ≥80% with no day actually over,
+        `ok` = comfortable margin. `not_applicable` (Lambda, SQS, API
+        Gateway, DynamoDB on-demand) is a real, correct, distinct status —
+        "this scales automatically, there's nothing to rightsize" is true
+        and worth saying, not a gap.
+      - 22 Vitest tests total now (`EC2.test.ts`, `DynamoDB.test.ts` new;
+        `trafficPropagation.test.ts` unchanged at 12) covering: adequate
+        sizing, undersized-with-no-ASG recommending a fleet size,
+        `instance_count` actually changing the verdict, per-day exceedance
+        (not whole-period), unrecognised-type fallback (doesn't throw),
+        on-demand DynamoDB being not_applicable even at huge traffic, and
+        specific RCU/WCU recommendations.
+      - Verified end-to-end in-browser against the rightsizing test
+        deployment at a stressed 300 req/s peak: both bottleneck nodes
+        correctly flagged `critical` (EC2: "over capacity on 7 of 31 days...
+        run at least 15x t3.micro"; DynamoDB: "too low on 31 of 31 days...
+        provision at least 240 RCU / 60 WCU") and all six serverless nodes
+        correctly showed `not_applicable` / no warning — and the per-day
+        analysis immediately surfaced something a peak-only check would
+        have missed: DynamoDB's provisioned capacity was too low *every
+        single day*, not just during the spike, while EC2 only failed near
+        the peak. That distinction is the actual point of working on
+        timeseries data rather than one peak number.
+      - **Honest scope note**: this is a *sanity-check/ballpark* assessment
+        (adequate / tight / over, with a concrete recommendation), not a
+        literal failure-rate or latency-degradation simulation. "Requests
+        start failing" is represented as a status + "N of M days over
+        capacity", not as a modeled error rate or queueing delay. Building
+        an actual failure/latency model would be a substantially bigger
+        step (needs a queueing or saturation curve, not just a capacity
+        ceiling) - noted below as a possible future direction, not started.
+- [x] **UI**: a dedicated "Rightsizing" section in `TrafficPuck` (new
+      `RightsizingPanel`/`CapacityBadge` components), always visible (not
+      hidden behind the cost-breakdown toggle) since it's the headline
+      sanity-check info — "N of M sized resources need attention", one card
+      per flagged node (service, node id, message, recommendation, which
+      days), red-tinted for critical/amber for warning, sorted
+      critical-first. A single green line ("all N sized resources look
+      adequately provisioned") when there's nothing to flag. The existing
+      cost breakdown table also gained a compact "Capacity" column
+      (colored ✓/~/⚠ + utilization%) so the two views of the same data stay
+      next to each other. On the canvas, the Capacity layer's per-node
+      badges are now status-colored instead of a flat warning triangle:
+      green/amber/red border+text for ok/warning/critical, a muted italic
+      "auto-scales" tag for not_applicable (serverless) nodes, full message
+      + recommendation on hover via the native `title` tooltip.
+- [ ] **Possible next step, not started**: an actual failure/latency model
+      (e.g. a saturation curve past 100% utilization, or queueing delay for
+      SQS/pull consumers specifically) rather than a binary
+      over-capacity-or-not per day. Would need a real design discussion
+      first, not a guess.
+- [ ] EC2's `EC2_ESTIMATED_MAX_RPS` table only covers the instance types
+      already in `EC2_HOURLY_USD` (~11 types) - same unrecognised-type
+      fallback pattern as pricing, documented as illustrative not
+      benchmarked.
 
 ## Track 1 — App: Visual design ("Blueprint" theme + light/dark)
 

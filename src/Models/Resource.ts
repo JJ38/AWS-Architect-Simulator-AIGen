@@ -1,4 +1,4 @@
-import type { CodeChunk, CostEstimate, EdgeType, PermissionType, Property, PropertyRecord, ResourceData, Service, ValidationResult } from "../types";
+import type { CapacityAssessment, CodeChunk, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, Property, PropertyRecord, ResourceData, Service, ValidationResult } from "../types";
 
 
 export interface ResourceStatics{
@@ -42,13 +42,17 @@ export default abstract class Resource{
     // cost math here must scale with durationSeconds, not assume a month.
     abstract estimateCost(workloadRps: number, durationSeconds: number): CostEstimate;
 
-    // Optional: capacity-adequacy warnings (e.g. "this instance/table is
-    // undersized for its peak traffic"), checked once against the traffic
-    // profile's peak rps rather than per-day - a provisioned resource can be
+    // Rightsizing/bottleneck check: given the resolved workload for every
+    // point in the traffic profile (not just the peak - a resource can be
     // fine most of the period and only fall over on the one spike day, so
-    // this is evaluated separately from the per-day cost loop in simulate.ts.
-    checkCapacityWarnings(peakWorkloadRps: number): string[]{
-        return [];
+    // the *which days* question matters, not just *does it ever happen*),
+    // judge whether this node's current configuration can handle it, and if
+    // not, what to change. Default: no fixed capacity ceiling to size
+    // against (true of every serverless/auto-scaling service - Lambda, SQS,
+    // API Gateway, DynamoDB on-demand - this isn't a gap, it's the correct
+    // answer for those). EC2 and DynamoDB-provisioned override this.
+    assessCapacity(dailyWorkload: NodeDailyWorkload[]): CapacityAssessment{
+        return { status: "not_applicable", message: "Scales automatically - no fixed capacity to size." };
     }
 
 

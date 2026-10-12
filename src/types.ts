@@ -131,3 +131,26 @@ export interface CostEstimate{
     warnings: string[]
 
 }
+
+// One traffic-profile point's resolved workload for a single node - the
+// rightsizing engine's input. A full period's worth of these (not just the
+// peak) is what lets it say *when* a resource is overloaded, not just
+// *whether* it ever is.
+export interface NodeDailyWorkload{
+
+    label: string,
+    rps: number
+
+}
+
+export type CapacityStatus = "ok" | "warning" | "critical" | "not_applicable";
+
+export interface CapacityAssessment{
+
+    status: CapacityStatus,
+    message: string, // short, always present - e.g. "62% of peak capacity" or "Scales automatically"
+    recommendation?: string, // actionable fix, only present for warning/critical
+    peakUtilizationPercent?: number, // peak workload / capacity ceiling * 100 - absent where there's no fixed ceiling (serverless)
+    exceededDayLabels?: string[] // which traffic-profile points exceed the capacity ceiling, if any
+
+}

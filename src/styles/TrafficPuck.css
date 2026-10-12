@@ -157,6 +157,138 @@
     margin: 0px;
 }
 
+/* Rightsizing panel - always visible (not behind the breakdown toggle),
+   since this is the headline "is anything wrong" sanity check. */
+.trafficPuckRightsizing{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+}
+
+.trafficPuckRightsizingTitle{
+    margin: 0px;
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.trafficPuckRightsizingEmpty{
+    margin: 0px;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+
+.trafficPuckRightsizingOk{
+    margin: 0px;
+    font-size: 0.85em;
+    color: var(--success);
+}
+
+.trafficPuckRightsizingSummary{
+    margin: 0px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.trafficPuckRightsizingList{
+    list-style: none;
+    margin: 0px;
+    padding: 0px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.trafficPuckRightsizingCard{
+    border-left: 3px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    background-color: var(--surface-panel-raised);
+}
+
+.trafficPuckRightsizingCard-critical{
+    border-left-color: var(--danger);
+    background-color: var(--danger-bg);
+}
+
+.trafficPuckRightsizingCard-warning{
+    border-left-color: var(--warning);
+    background-color: var(--warning-bg);
+}
+
+.trafficPuckRightsizingCardHeader{
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.trafficPuckRightsizingCardService{
+    font-weight: 600;
+    font-size: 0.85em;
+    color: var(--text-primary);
+}
+
+.trafficPuckRightsizingCardNode{
+    font-family: var(--font-mono);
+    font-size: 0.75em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.trafficPuckRightsizingCardMessage{
+    margin: 0px;
+    font-size: 0.85em;
+    color: var(--text-primary);
+}
+
+.trafficPuckRightsizingCardRecommendation{
+    margin: 4px 0px 0px 0px;
+    font-size: 0.82em;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.trafficPuckRightsizingCardDays{
+    margin: 4px 0px 0px 0px;
+    font-size: 0.78em;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+}
+
+.trafficPuckCapacityBadge{
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.trafficPuckCapacityBadge-ok{
+    color: var(--success);
+}
+
+.trafficPuckCapacityBadge-warning{
+    color: var(--warning);
+}
+
+.trafficPuckCapacityBadge-critical{
+    color: var(--danger);
+}
+
+.trafficPuckCapacityBadge-na{
+    color: var(--text-muted);
+    font-style: italic;
+    font-weight: 400;
+}
+
 .trafficPuckBreakdown{
     display: flex;
     flex-direction: column;

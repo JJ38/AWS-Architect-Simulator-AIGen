@@ -25,12 +25,14 @@ aggressively without touching the original.
 - `npm run build` — type-check (`tsc -b`) and production build
 - `npm run lint` — ESLint (`eslint.config.js`)
 - `npm run preview` — preview the production build
-- `npm run test` — Vitest, currently covering `src/Simulation/trafficPropagation.ts`
-  only. Added after that function shipped two real bugs in a row (traffic
-  getting divided across unrelated entry points, then an unconnected node
-  being treated as a traffic source) that manual Playwright spot-checks
-  weren't catching reliably — it's a pure function with no React/DOM
-  dependency, cheap to test thoroughly. When touching propagation/capacity
+- `npm run test` — Vitest, covering `src/Simulation/trafficPropagation.ts` and
+  the EC2/DynamoDB `assessCapacity` rightsizing logic
+  (`src/Models/Services/*.test.ts`). Added after `trafficPropagation.ts`
+  shipped two real bugs in a row (traffic getting divided across unrelated
+  entry points, then an unconnected node being treated as a traffic source)
+  that manual Playwright spot-checks weren't catching reliably — these are
+  pure functions with no React/DOM dependency, cheap to test thoroughly.
+  When touching propagation/capacity
   logic, add a test for the scenario rather than only checking it by hand in
   the browser; when something in that area turns out wrong again, write the
   regression test *before* fixing it.
@@ -128,15 +130,22 @@ directly in components:
   a regression test for exactly this shape (producer → queue → puller).
   `simulate.ts` calls `propagateTraffic` once per traffic-profile point (so
   once per day) and sums each node's `Resource.estimateCost()` into a period
-  total, tracking both average and peak workload per node.
-  Capacity-adequacy warnings (is this node big enough for its *peak*
-  traffic) are a separate optional
-  `Resource.checkCapacityWarnings(peakWorkloadRps)` hook, checked once after
-  the day loop rather than per-day, so a resource that's fine most of the
-  period and only overloaded on the peak day gets one clear warning instead of
-  near-duplicates. See `todo.md`'s Simulation and Capacity sim sections for
-  the specific simplifying assumptions and what's still ahead (rightsizing
-  recommendations, instance-size-aware thresholds).
+  total, also accumulating each node's full per-day workload series (not
+  just its peak) for the rightsizing step below.
+  **Rightsizing**: `Resource.assessCapacity(dailyWorkload:
+  NodeDailyWorkload[]): CapacityAssessment` (default: `not_applicable` -
+  correct for anything serverless/auto-scaling) is called once per node
+  after the day loop, given the *whole* traffic-profile series rather than
+  just the peak - this is deliberate: a resource that's fine for 29 of 31
+  days and only overloaded on the one spike day is a materially different
+  situation from one that's undersized year-round, even with an identical
+  peak, and `CapacityAssessment.exceededDayLabels` is what lets a reader
+  (and the UI) tell those apart instead of collapsing to one boolean. EC2
+  and DynamoDB (provisioned mode) are the two resources with a real sizing
+  dimension today - see `todo.md`'s Capacity sim section for exactly what
+  each does, the per-instance-type throughput table, and what's explicitly
+  out of scope (this produces a status + recommendation, not a modeled
+  failure rate or latency curve).
 - **`src/exampleDeployments/`** holds bundled test/demo architectures, built
   with the real `Resource.create()` factories rather than hand-rolled JSON
   (so they can't drift from the actual data shape) and loaded directly via a

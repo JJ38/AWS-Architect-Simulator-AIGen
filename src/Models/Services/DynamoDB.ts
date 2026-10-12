@@ -1,4 +1,4 @@
-import type { CostEstimate, EdgeType, PermissionType, ResourceData, Service, ValidationResult } from "../../types";
+import type { CapacityAssessment, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, ResourceData, Service, ValidationResult } from "../../types";
 import Resource from "../Resource";
 import { ASSUMED_READ_FRACTION, ASSUMED_WRITE_FRACTION, DYNAMODB_ON_DEMAND_PER_MILLION_READ_USD, DYNAMODB_ON_DEMAND_PER_MILLION_WRITE_USD, DYNAMODB_PROVISIONED_HOURLY_PER_RCU_USD, DYNAMODB_PROVISIONED_HOURLY_PER_WCU_USD, hoursInDuration, requestsOverDuration } from "../../Simulation/pricing";
 
@@ -135,12 +135,16 @@ export default class DyanmoDB extends Resource{
 
     }
 
-    checkCapacityWarnings(peakWorkloadRps: number): string[] {
+    // On-demand scales automatically - nothing to rightsize. Provisioned
+    // mode is the rightsizing case: find every day whose required RCU/WCU
+    // (derived from that day's resolved traffic) exceeds what's configured,
+    // not just the peak day, and recommend sizing for the actual peak.
+    assessCapacity(dailyWorkload: NodeDailyWorkload[]): CapacityAssessment{
 
         const billingMode: string = this.terraformProperties?.aws_dynamodb_table?.billing_mode?.value ?? "PAY_PER_REQUEST";
 
         if(billingMode !== "PROVISIONED"){
-            return [];
+            return { status: "not_applicable", message: "On-demand billing - scales automatically, no capacity to size." };
         }
 
         const readCapacity: number = this.terraformProperties?.aws_dynamodb_table?.read_capacity?.value ?? 0;
@@ -149,14 +153,49 @@ export default class DyanmoDB extends Resource{
         const { readFraction } = this.getReadFraction();
         const writeFraction = 1 - readFraction;
 
-        const requiredReadCapacity = peakWorkloadRps * readFraction;
-        const requiredWriteCapacity = peakWorkloadRps * writeFraction;
+        const peak = dailyWorkload.reduce((max, day) => Math.max(max, day.rps), 0);
+        const peakRequiredRead = peak * readFraction;
+        const peakRequiredWrite = peak * writeFraction;
 
-        if(readCapacity < requiredReadCapacity || writeCapacity < requiredWriteCapacity){
-            return [`Provisioned capacity (${readCapacity} RCU / ${writeCapacity} WCU) may be too low for peak traffic (~${peakWorkloadRps.toFixed(1)} req/s) - estimate assumes a ${(readFraction * 100).toFixed(0)}/${(writeFraction * 100).toFixed(0)} read/write split.`];
+        const exceededDayLabels = dailyWorkload
+            .filter((day) => day.rps * readFraction > readCapacity || day.rps * writeFraction > writeCapacity)
+            .map((day) => day.label);
+
+        // Whichever of read/write is tighter relative to its own capacity
+        // drives the headline utilization number.
+        const readUtilization = readCapacity > 0 ? (peakRequiredRead / readCapacity) * 100 : (peakRequiredRead > 0 ? Infinity : 0);
+        const writeUtilization = writeCapacity > 0 ? (peakRequiredWrite / writeCapacity) * 100 : (peakRequiredWrite > 0 ? Infinity : 0);
+        const peakUtilizationPercent = Math.max(readUtilization, writeUtilization);
+
+        if(exceededDayLabels.length > 0){
+
+            const recommendedRead = Math.ceil(peakRequiredRead);
+            const recommendedWrite = Math.ceil(peakRequiredWrite);
+
+            return {
+                status: "critical",
+                message: `Provisioned capacity (${readCapacity} RCU / ${writeCapacity} WCU) is too low on ${exceededDayLabels.length} of ${dailyWorkload.length} day(s).`,
+                recommendation: `Provision at least ${recommendedRead} RCU / ${recommendedWrite} WCU to cover the peak (~${peak.toFixed(1)} req/s, assuming a ${(readFraction * 100).toFixed(0)}/${(writeFraction * 100).toFixed(0)} read/write split) - or switch to on-demand billing if traffic is this spiky.`,
+                peakUtilizationPercent: Number.isFinite(peakUtilizationPercent) ? peakUtilizationPercent : 999,
+                exceededDayLabels
+            };
+
         }
 
-        return [];
+        if(peakUtilizationPercent >= 80){
+            return {
+                status: "warning",
+                message: `Peak traffic needs ~${peakUtilizationPercent.toFixed(0)}% of provisioned capacity - comfortable for now, but little headroom.`,
+                recommendation: "Consider raising provisioned capacity, or switching to on-demand if traffic is unpredictable.",
+                peakUtilizationPercent
+            };
+        }
+
+        return {
+            status: "ok",
+            message: `Peak traffic needs ~${peakUtilizationPercent.toFixed(0)}% of provisioned capacity.`,
+            peakUtilizationPercent
+        };
 
     }
 

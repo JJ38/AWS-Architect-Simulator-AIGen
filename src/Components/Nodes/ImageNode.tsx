@@ -1,15 +1,37 @@
 import { Handle, Position } from '@xyflow/react';
 import '../../styles/ImageNode.css';
 
-function formatBadgeText(data: any): string | null {
+const CAPACITY_STATUS_ICON: Record<string, string> = {
+    ok: '✓',
+    warning: '~',
+    critical: '⚠',
+    not_applicable: '',
+};
 
-    if(data.canvasView === 'cost' && data.nodeMetric != null){
-        return `$${data.nodeMetric.costUSD.toFixed(2)}`;
+function formatBadge(data: any): { text: string, className: string, title?: string } | null {
+
+    if(data.nodeMetric == null){
+        return null;
     }
 
-    if(data.canvasView === 'capacity' && data.nodeMetric != null){
-        const warningMarker = data.nodeMetric.hasWarning ? ' ⚠' : '';
-        return `${data.nodeMetric.peakWorkloadRps.toFixed(1)} req/s${warningMarker}`;
+    if(data.canvasView === 'cost'){
+        return { text: `$${data.nodeMetric.costUSD.toFixed(2)}`, className: 'imageNodeBadge-cost' };
+    }
+
+    if(data.canvasView === 'capacity'){
+
+        const capacity = data.nodeMetric.capacity;
+
+        if(capacity.status === 'not_applicable'){
+            return { text: 'auto-scales', className: 'imageNodeBadge-capacity-na', title: capacity.message };
+        }
+
+        const icon = CAPACITY_STATUS_ICON[capacity.status] ?? '';
+        const text = `${icon} ${Math.round(capacity.peakUtilizationPercent ?? 0)}% cap.`;
+        const title = [capacity.message, capacity.recommendation].filter(Boolean).join(' ');
+
+        return { text, className: `imageNodeBadge-capacity-${capacity.status}`, title };
+
     }
 
     return null;
@@ -18,7 +40,7 @@ function formatBadgeText(data: any): string | null {
 
 function imageNode({ data, isConnectable }: { data: any; isConnectable: boolean }) {
 
-    const badgeText = formatBadgeText(data);
+    const badge = formatBadge(data);
 
     return (
         <>
@@ -32,8 +54,8 @@ function imageNode({ data, isConnectable }: { data: any; isConnectable: boolean 
             <div className="imageNodeOuter">
                 <img className={`imageNodeWrapper ${data.isSelected ? "selectedNode" : "imageNode"}`} src={data.service?.image} alt={data.service?.description} />
                 {
-                    badgeText != null &&
-                    <div className={`imageNodeBadge imageNodeBadge-${data.canvasView}`}>{badgeText}</div>
+                    badge != null &&
+                    <div className={`imageNodeBadge ${badge.className}`} title={badge.title}>{badge.text}</div>
                 }
             </div>
 

@@ -1,7 +1,7 @@
 import Resource from "../Resource";
-import type { CostEstimate, EdgeType, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
+import type { CapacityAssessment, CostEstimate, EdgeType, NodeDailyWorkload, PermissionType, PropertyRecord, ResourceData, Service, ValidationResult } from "../../types.ts";
 import { IamFactory } from "../IamFactory.ts";
-import { EC2_DEFAULT_HOURLY_USD, EC2_HOURLY_USD, hoursInDuration } from "../../Simulation/pricing.ts";
+import { EC2_DEFAULT_HOURLY_USD, EC2_DEFAULT_MAX_RPS, EC2_ESTIMATED_MAX_RPS, EC2_HOURLY_USD, hoursInDuration } from "../../Simulation/pricing.ts";
 
 export default class EC2 extends Resource{
 
@@ -65,7 +65,16 @@ export default class EC2 extends Resource{
                 },
                 "aws_iam_role": IamFactory.makeIamRole("", "ec2.amazonaws.com")
             },
-            componentProperties: {},
+            componentProperties: {
+                // Not a real Terraform argument - this app doesn't model an
+                // auto scaling group as a separate resource yet, so fleet
+                // size is represented directly here. 1 = a single bare
+                // instance with no ASG behind it (the common mistake this
+                // whole feature exists to catch).
+                "simulation": {
+                    "instance_count": { value: 1, type: "number" }
+                }
+            },
         }
 
     }
@@ -86,9 +95,21 @@ export default class EC2 extends Resource{
         return null;
     }
 
-    // EC2 bills for the instance running, not per-request - cost scales with
-    // durationSeconds regardless of workloadRps. See checkCapacityWarnings
-    // for the traffic-vs-instance-size check.
+    private getInstanceCount(): { instanceCount: number, wasDefaulted: boolean }{
+
+        const instanceCount: number | null = this.componentProperties?.simulation?.instance_count?.value ?? null;
+
+        if(instanceCount == null){
+            return { instanceCount: 1, wasDefaulted: true };
+        }
+
+        return { instanceCount, wasDefaulted: false };
+
+    }
+
+    // EC2 bills per instance running, not per-request - cost scales with
+    // durationSeconds and instance_count, regardless of workloadRps. See
+    // assessCapacity for the traffic-vs-fleet-size check.
     estimateCost(workloadRps: number, durationSeconds: number): CostEstimate {
 
         const warnings: string[] = [];
@@ -105,7 +126,13 @@ export default class EC2 extends Resource{
             warnings.push(`Unrecognised instance_type "${instanceType}" - using a default price estimate.`);
         }
 
-        const computeCost = hourlyUSD * hoursInDuration(durationSeconds);
+        const { instanceCount, wasDefaulted } = this.getInstanceCount();
+
+        if(wasDefaulted){
+            warnings.push("No instance_count set - assuming a single instance.");
+        }
+
+        const computeCost = hourlyUSD * instanceCount * hoursInDuration(durationSeconds);
 
         return {
             costUSD: computeCost,
@@ -115,13 +142,55 @@ export default class EC2 extends Resource{
 
     }
 
-    checkCapacityWarnings(peakWorkloadRps: number): string[] {
+    // Rightsizing check: is the fleet (instance_type x instance_count) big
+    // enough for the traffic profile's shape, not just its peak? A resource
+    // that's fine for 29 of 31 days and only falls over on the Dec 24 spike
+    // is a materially different situation from one that's undersized
+    // year-round, even though both have the same peak - exceededDayLabels
+    // is what lets the UI (and a reader) tell those apart.
+    assessCapacity(dailyWorkload: NodeDailyWorkload[]): CapacityAssessment{
 
-        if(peakWorkloadRps > 200){
-            return ["High peak traffic for a single EC2 instance with no auto scaling group - consider an ASG."];
+        const instanceType: string | null = this.terraformProperties?.aws_instance?.instance_type?.value ?? null;
+        const perInstanceMaxRps = (instanceType != null ? EC2_ESTIMATED_MAX_RPS[instanceType] : undefined) ?? EC2_DEFAULT_MAX_RPS;
+        const { instanceCount } = this.getInstanceCount();
+        const fleetCapacityRps = perInstanceMaxRps * instanceCount;
+
+        const peak = dailyWorkload.reduce((max, day) => Math.max(max, day.rps), 0);
+        const peakUtilizationPercent = fleetCapacityRps > 0 ? (peak / fleetCapacityRps) * 100 : 0;
+        const exceededDayLabels = dailyWorkload.filter((day) => day.rps > fleetCapacityRps).map((day) => day.label);
+
+        if(exceededDayLabels.length > 0){
+
+            const neededInstanceCount = Math.max(1, Math.ceil(peak / perInstanceMaxRps));
+
+            const recommendation = instanceCount <= 1
+                ? `This is a single instance with no auto scaling group behind it. Run at least ${neededInstanceCount}x ${instanceType ?? "this instance type"} behind an ASG (or resize to a larger type) to cover the peak.`
+                : `Scale the fleet to at least ${neededInstanceCount}x ${instanceType ?? "this instance type"} (currently ${instanceCount}) to cover the peak.`;
+
+            return {
+                status: "critical",
+                message: `Over capacity on ${exceededDayLabels.length} of ${dailyWorkload.length} day(s) - peak is ${peakUtilizationPercent.toFixed(0)}% of fleet capacity.`,
+                recommendation,
+                peakUtilizationPercent,
+                exceededDayLabels
+            };
+
         }
 
-        return [];
+        if(peakUtilizationPercent >= 80){
+            return {
+                status: "warning",
+                message: `Peak traffic is ${peakUtilizationPercent.toFixed(0)}% of fleet capacity - comfortable for now, but little headroom.`,
+                recommendation: `Consider adding another ${instanceType ?? "instance"} (or an ASG with headroom) before the next traffic increase.`,
+                peakUtilizationPercent
+            };
+        }
+
+        return {
+            status: "ok",
+            message: `Peak traffic is ${peakUtilizationPercent.toFixed(0)}% of fleet capacity.`,
+            peakUtilizationPercent
+        };
 
     }
 

@@ -7,7 +7,7 @@ import IconButton from "../Buttons/IconButton";
 import TrafficChart from "./TrafficChart";
 import TrafficSparkline from "./TrafficSparkline";
 import '../../styles/TrafficPuck.css';
-import type { SimulationResult } from "../../Simulation/simulate";
+import type { NodeSimulationResult, SimulationResult } from "../../Simulation/simulate";
 import {
     DEFAULT_PERIOD_DAYS,
     averageRps,
@@ -25,6 +25,93 @@ const PRESETS: { label: string; build: () => TrafficProfile }[] = [
     { label: "Weekly cycle", build: () => createWeeklyCycleProfile(DEFAULT_PERIOD_DAYS, 10, 2.5) },
     { label: "Holiday spike", build: () => createSpikeProfile(DEFAULT_PERIOD_DAYS, 8, 60, 23) },
 ];
+
+const CAPACITY_STATUS_ICON: Record<string, string> = {
+    ok: "✓",
+    warning: "~",
+    critical: "⚠",
+};
+
+function CapacityBadge({ capacity }: { capacity: NodeSimulationResult["capacity"] }){
+
+    if(capacity.status === "not_applicable"){
+        return <span className="trafficPuckCapacityBadge trafficPuckCapacityBadge-na" title={capacity.message}>auto</span>;
+    }
+
+    const icon = CAPACITY_STATUS_ICON[capacity.status] ?? "";
+    const utilization = Math.round(capacity.peakUtilizationPercent ?? 0);
+
+    return (
+        <span className={`trafficPuckCapacityBadge trafficPuckCapacityBadge-${capacity.status}`} title={capacity.message}>
+            {icon} {utilization}%
+        </span>
+    );
+
+}
+
+function RightsizingPanel({ simulationResult }: { simulationResult: SimulationResult }){
+
+    const sizedNodes = simulationResult.perNode.filter((node) => node.capacity.status !== "not_applicable");
+    const issues = simulationResult.perNode
+        .filter((node) => node.capacity.status === "critical" || node.capacity.status === "warning")
+        .sort((a, b) => (a.capacity.status === "critical" ? 0 : 1) - (b.capacity.status === "critical" ? 0 : 1));
+
+    return (
+        <div className="trafficPuckRightsizing">
+
+            <h4 className="trafficPuckRightsizingTitle">Rightsizing</h4>
+
+            {
+                sizedNodes.length === 0 &&
+                <p className="trafficPuckRightsizingEmpty">
+                    Nothing to size yet — add an EC2 instance or a provisioned DynamoDB table to see recommendations here.
+                </p>
+            }
+
+            {
+                sizedNodes.length > 0 && issues.length === 0 &&
+                <p className="trafficPuckRightsizingOk">
+                    ✓ All {sizedNodes.length} sized resource{sizedNodes.length === 1 ? "" : "s"} look adequately provisioned for this traffic profile.
+                </p>
+            }
+
+            {
+                issues.length > 0 &&
+                <>
+                    <p className="trafficPuckRightsizingSummary">
+                        {issues.length} of {sizedNodes.length} sized resource{sizedNodes.length === 1 ? "" : "s"} need attention:
+                    </p>
+                    <ul className="trafficPuckRightsizingList">
+                        {
+                            issues.map((node) =>
+                                <li key={node.nodeId} className={`trafficPuckRightsizingCard trafficPuckRightsizingCard-${node.capacity.status}`}>
+                                    <div className="trafficPuckRightsizingCardHeader">
+                                        <span className="trafficPuckRightsizingCardService">{node.serviceName}</span>
+                                        <span className="trafficPuckRightsizingCardNode">{node.nodeId}</span>
+                                    </div>
+                                    <p className="trafficPuckRightsizingCardMessage">{node.capacity.message}</p>
+                                    {
+                                        node.capacity.recommendation &&
+                                        <p className="trafficPuckRightsizingCardRecommendation">{node.capacity.recommendation}</p>
+                                    }
+                                    {
+                                        node.capacity.exceededDayLabels && node.capacity.exceededDayLabels.length > 0 &&
+                                        <p className="trafficPuckRightsizingCardDays">
+                                            Over capacity on: {node.capacity.exceededDayLabels.slice(0, 6).join(", ")}
+                                            {node.capacity.exceededDayLabels.length > 6 ? ` +${node.capacity.exceededDayLabels.length - 6} more` : ""}
+                                        </p>
+                                    }
+                                </li>
+                            )
+                        }
+                    </ul>
+                </>
+            }
+
+        </div>
+    );
+
+}
 
 function CostBreakdownTable({ simulationResult }: { simulationResult: SimulationResult }){
 
@@ -52,6 +139,7 @@ function CostBreakdownTable({ simulationResult }: { simulationResult: Simulation
                             <th>avg req/s</th>
                             <th>peak req/s</th>
                             <th>$ / period</th>
+                            <th>Capacity</th>
                             <th>Notes</th>
                         </tr>
                     </thead>
@@ -64,6 +152,7 @@ function CostBreakdownTable({ simulationResult }: { simulationResult: Simulation
                                     <td className="trafficPuckTableMono">{nodeResult.averageWorkloadRps.toFixed(2)}</td>
                                     <td className="trafficPuckTableMono">{nodeResult.peakWorkloadRps.toFixed(2)} ({nodeResult.peakLabel})</td>
                                     <td className="trafficPuckTableMono">${nodeResult.costUSD.toFixed(2)}</td>
+                                    <td><CapacityBadge capacity={nodeResult.capacity} /></td>
                                     <td>
                                         {
                                             nodeResult.warnings.map((warning, index) =>
@@ -177,6 +266,8 @@ export default function TrafficPuck(
             <p className="trafficPuckTotal">
                 Total estimated cost: ${simulationResult.totalCostUSD.toFixed(2)} over {simulationResult.periodDays} days
             </p>
+
+            <RightsizingPanel simulationResult={simulationResult} />
 
             {
                 isDocked &&

@@ -50,3 +50,37 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Capacity badges carry a hover tooltip (the full rightsizing message +
+   recommendation), so they need pointer events unlike the cost badge. */
+.imageNodeBadge-capacity-ok,
+.imageNodeBadge-capacity-warning,
+.imageNodeBadge-capacity-critical,
+.imageNodeBadge-capacity-na{
+  pointer-events: auto;
+  cursor: help;
+  font-weight: 600;
+}
+
+.imageNodeBadge-capacity-ok{
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.imageNodeBadge-capacity-warning{
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.imageNodeBadge-capacity-critical{
+  border-color: var(--danger);
+  color: var(--danger);
+  background-color: var(--danger-bg);
+}
+
+.imageNodeBadge-capacity-na{
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
